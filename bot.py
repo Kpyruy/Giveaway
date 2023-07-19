@@ -15,13 +15,11 @@ from pymongo import MongoClient
 import motor.motor_asyncio
 import json
 
-
 cluster = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://Admin:T8Lylcpso9jNs5Yw@cluster0.1t9opzs.mongodb.net/RandomBot?retryWrites=true&w=majority")
 user_collections = cluster.RandomBot.user
 key_collection = cluster.RandomBot.key
 contests_collection = cluster.RandomBot.contests
 promo_collection = cluster.RandomBot.promo
-
 
 timezone = pytz.timezone('Europe/Kiev')
 current_time = datetime.now(timezone)
@@ -95,8 +93,10 @@ async def update_status(user_id):
         status = "Молодчик 🧋"
     elif wins == 15:
         status = "Удачливый 🤞"
-    elif wins == 20:
+    elif wins == 25:
         status = "Лакер 🍀"
+    elif wins == 50:
+        status = "Уникум ♾️"
     elif participation == 5:
         status = "Начало положено 🍤"
     elif participation == 15:
@@ -105,6 +105,8 @@ async def update_status(user_id):
         status = "Батарейка 🔋"
     elif participation == 50:
         status = "Смотрящий 👀"
+    elif participation == 100:
+        status = "Невероятный 🧭"
     else:
         return  # Не менять статус, если не подходит ни одно условие
 
@@ -2209,45 +2211,50 @@ async def process_search_command(message: types.Message, state: FSMContext):
         await bot.send_message(message.chat.id, profile, parse_mode="Markdown")
         await state.finish()
     else:
-        search_id = int(message.text.split(' ')[1])  # Получение айди конкурса из сообщения
-        contest = await contests_collection.find_one({"_id": search_id})
+        if args:
+            search_id = int(message.text.split(' ')[1])  # Получение айди конкурса из сообщения
+            contest = await contests_collection.find_one({"_id": search_id})
 
-        if contest:
-            contest_id = contest.get("_id")
-            contest_name = contest.get("contest_name")
-            owner_id = contest.get("owner_id")
-            contest_description = contest.get("contest_description")
-            members = contest.get("members")
-            end_date = contest.get("end_date")
-            members_message = len(members)
-            winners = contest.get("winners", 0)
-            contest_winners = contest.get("contest_winners")
+            if contest:
+                contest_id = contest.get("_id")
+                contest_name = contest.get("contest_name")
+                owner_id = contest.get("owner_id")
+                contest_description = contest.get("contest_description")
+                members = contest.get("members")
+                end_date = contest.get("end_date")
+                members_message = len(members)
+                winners = contest.get("winners", 0)
+                contest_winners = contest.get("contest_winners")
 
-            if contest_winners:
+                if contest_winners:
 
-                contest_winners_list = "\n".join(
-                    [f"<b>{idx}.</b> @{await get_username_winners(user)} — <code>{user}</code>" for idx, user in
-                     enumerate(contest_winners, start=1)])
-                result_message = f"<b>🔎 Результаты поиска конкурса </b> <code>{contest_id}</code><b>:</b>\n\n" \
-                                 f"<b>🍙 Автор:</b> <code>{owner_id}</code>\n" \
-                                 f"<b>🧊 Идентификатор:</b> <code>{contest_id}</code>\n" \
-                                 f"<b>🪁 Имя:</b> <code>{contest_name}</code>\n" \
-                                 f"<b>🎗️ Описание:</b> <i>{contest_description}</i>\n" \
-                                 f"<b>🎖️ Количество победителей:</b> <code>{winners}</code>\n" \
-                                 f"<b>👤 Количество участников:</b> <code>{members_message}</code>\n" \
-                                 f"<b>🏆 Победители:</b> \n{contest_winners_list}\n" \
-                                 f"<b>📆 Дата окончания:</b> <code>{end_date}</code>"
+                    contest_winners_list = "\n".join(
+                        [f"<b>{idx}.</b> @{await get_username_winners(user)} — <code>{user}</code>" for idx, user in
+                         enumerate(contest_winners, start=1)])
+                    result_message = f"<b>🔎 Результаты поиска конкурса </b> <code>{contest_id}</code><b>:</b>\n\n" \
+                                     f"<b>🍙 Автор:</b> <code>{owner_id}</code>\n" \
+                                     f"<b>🧊 Идентификатор:</b> <code>{contest_id}</code>\n" \
+                                     f"<b>🪁 Имя:</b> <code>{contest_name}</code>\n" \
+                                     f"<b>🎗️ Описание:</b> <i>{contest_description}</i>\n" \
+                                     f"<b>🎖️ Количество победителей:</b> <code>{winners}</code>\n" \
+                                     f"<b>👤 Количество участников:</b> <code>{members_message}</code>\n" \
+                                     f"<b>🏆 Победители:</b> \n{contest_winners_list}\n" \
+                                     f"<b>📆 Дата окончания:</b> <code>{end_date}</code>"
+                else:
+                    result_message = f"<b>🔎 Результаты поиска конкурса </b> <code>{contest_id}</code><b>:</b>\n\n" \
+                                     f"<b>🍙 Автор:</b> <code>{owner_id}</code>\n" \
+                                     f"<b>🧊 Идентификатор:</b> <code>{contest_id}</code>\n" \
+                                     f"<b>🪁 Имя:</b> <code>{contest_name}</code>\n" \
+                                     f"<b>🎗️ Описание:</b> <i>{contest_description}</i>\n" \
+                                     f"<b>🎖️ Количество победителей:</b> <code>{winners}</code>\n" \
+                                     f"<b>👤 Количество участников:</b> <code>{members_message}</code>\n" \
+                                     f"<b>📆 Дата окончания:</b> <code>{end_date}</code>"
+
+                await bot.send_message(message.chat.id, result_message, parse_mode="HTML")
             else:
-                result_message = f"<b>🔎 Результаты поиска конкурса </b> <code>{contest_id}</code><b>:</b>\n\n" \
-                                 f"<b>🍙 Автор:</b> <code>{owner_id}</code>\n" \
-                                 f"<b>🧊 Идентификатор:</b> <code>{contest_id}</code>\n" \
-                                 f"<b>🪁 Имя:</b> <code>{contest_name}</code>\n" \
-                                 f"<b>🎗️ Описание:</b> <i>{contest_description}</i>\n" \
-                                 f"<b>🎖️ Количество победителей:</b> <code>{winners}</code>\n" \
-                                 f"<b>👤 Количество участников:</b> <code>{members_message}</code>\n" \
-                                 f"<b>📆 Дата окончания:</b> <code>{end_date}</code>"
-
-            await bot.send_message(message.chat.id, result_message, parse_mode="HTML")
+                await bot.send_message(message.chat.id,
+                                       "*❌ Ответьте на сообщение пользователя или укажите айди после команды* /search `{айди}`",
+                                       parse_mode="Markdown")
         else:
             await bot.send_message(message.chat.id,
                                     "*❌ Ответьте на сообщение пользователя или укажите айди после команды* /search `{айди}`",
@@ -2280,99 +2287,100 @@ async def start_contest_command(message: types.Message):
         # Сохранение ID сообщения в глобальную переменную
         profile_messages.append(reply.message_id)
 
-# Перманнентная блокировака через команду
-@dp.message_handler(commands=['permanent'])
-async def process_search_command(message: types.Message, state: FSMContext):
-    args = message.get_args()
-
-    global permanent_message_id
-
-    profile_user_id = message.from_user.id
-    user_data = await user_collections.find_one({"_id": profile_user_id})
-    ban_members = user_data.get("ban_members")
-
-    if not args and not message.reply_to_message:
-        if ban_members:
-            result_message = "<b>♾️ Черный список:</b>\n\n"
-            for idx, banned_user_id in enumerate(ban_members, start=1):
-                username = await get_ban_username(banned_user_id)
-                username = username.replace("_", "&#95;")
-                result_message += f"{idx}. @{username} (<code>{banned_user_id}</code>)\n"
-        else:
-            result_message = "<b>Заблокированных пользователей нет. 🚫</b>\n"
-
-        result_message += "\n<b>📛 Чтобы добавить/удалить пользователя</b>\n" \
-                          "/permanent <code>{id}</code>"
-
-        await bot.send_message(message.chat.id, result_message, parse_mode="HTML")
-        return
-
-    if args:
-        user_id = args
-    elif message.reply_to_message:
-        replied_user = message.reply_to_message.from_user
-        user_id = replied_user.id
-    else:
-        user_id = profile_user_id
-
-    if isinstance(user_id, int):
-        user_id = str(user_id)
-
-    try:
-        user_id = int(user_id)
-    except ValueError:
-        await bot.send_message(message.chat.id, "*❌ Введенный айди пользователя должен быть числом.*", parse_mode="Markdown")
-        return
-
-    if args and user_data and user_id == profile_user_id:
-        await bot.send_message(message.chat.id, "*❌ Нельзя добавить самого себя в черный список.*", parse_mode="Markdown")
-        return
-
-    # Проверка на существование пользователя
-    try:
-        await bot.get_chat_member(message.chat.id, user_id)
-    except Exception:
-        await bot.send_message(message.chat.id, "*❌ Такого пользователя не существует.*", parse_mode="Markdown")
-        return
-
-    if not args:
-        if ban_members:
-            result_message = "<b>♾️ Черный список:</b>\n\n"
-            for idx, banned_user_id in enumerate(ban_members, start=1):
-                username = await get_ban_username(banned_user_id)
-                username = username.replace("_", "&#95;")
-                result_message += f"{idx}. @{username} (<code>{banned_user_id}</code>)\n"
-        else:
-            result_message = "<b>Заблокированных пользователей нет. 🚫</b>\n"
-
-        result_message += "\n<b>📛 Чтобы добавить/удалить пользователя</b>\n" \
-                          "/permanent <code>{id}</code>"
-
-        await bot.send_message(message.chat.id, result_message, parse_mode="HTML")
-        return
-
-    if user_id in ban_members:
-        await del_profile_ban_members(profile_user_id, user_id)
-
-        username = await get_username(user_id)
-        username = username.replace("_", "&#95;")
-
-        profile = f'<b>🍁 Пользователь</b> @{username} (<code>{user_id}</code>) <b>был удален из черного списка вашего профиля!</b>\n\n' \
-                  f'<b>♾️ Для просмотра всех заблокированных пользователей напишите /permanent</b>'
-        await bot.send_message(message.chat.id, profile, parse_mode="HTML")
-        await state.finish()
-    else:
-        await update_profile_ban_members(profile_user_id, user_id)
-
-        username = await get_username(user_id)
-        username = username.replace("_", "&#95;")
-
-        profile = f'<b>🍁 Пользователь</b> @{username} (<code>{user_id}</code>) <b>был внесен в черный список вашего профиля!</b>\n\n' \
-                  f'<b>♾️ Для просмотра всех заблокированных пользователей напишите /permanent</b>'
-        await bot.send_message(message.chat.id, profile, parse_mode="HTML")
-        await state.finish()
+# # Перманнентная блокировака через команду
+# @dp.message_handler(commands=['permanent'])
+# async def process_search_command(message: types.Message, state: FSMContext):
+#     args = message.get_args()
+#
+#     global permanent_message_id
+#
+#     profile_user_id = message.from_user.id
+#     user_data = await user_collections.find_one({"_id": profile_user_id})
+#     ban_members = user_data.get("ban_members")
+#
+#     if not args and not message.reply_to_message:
+#         if ban_members:
+#             result_message = "<b>♾️ Черный список:</b>\n\n"
+#             for idx, banned_user_id in enumerate(ban_members, start=1):
+#                 username = await get_ban_username(banned_user_id)
+#                 username = username.replace("_", "&#95;")
+#                 result_message += f"{idx}. @{username} (<code>{banned_user_id}</code>)\n"
+#         else:
+#             result_message = "<b>Заблокированных пользователей нет. 🚫</b>\n"
+#
+#         result_message += "\n<b>📛 Чтобы добавить/удалить пользователя</b>\n" \
+#                           "/permanent <code>{id}</code>"
+#
+#         await bot.send_message(message.chat.id, result_message, parse_mode="HTML")
+#         return
+#
+#     if args:
+#         user_id = args
+#     elif message.reply_to_message:
+#         replied_user = message.reply_to_message.from_user
+#         user_id = replied_user.id
+#     else:
+#         user_id = profile_user_id
+#
+#     if isinstance(user_id, int):
+#         user_id = str(user_id)
+#
+#     try:
+#         user_id = int(user_id)
+#     except ValueError:
+#         await bot.send_message(message.chat.id, "*❌ Введенный айди пользователя должен быть числом.*", parse_mode="Markdown")
+#         return
+#
+#     if args and user_data and user_id == profile_user_id:
+#         await bot.send_message(message.chat.id, "*❌ Нельзя добавить самого себя в черный список.*", parse_mode="Markdown")
+#         return
+#
+#     # Проверка на существование пользователя
+#     try:
+#         await bot.get_chat_member(message.chat.id, user_id)
+#     except Exception:
+#         await bot.send_message(message.chat.id, "*❌ Такого пользователя не существует.*", parse_mode="Markdown")
+#         return
+#
+#     if not args:
+#         if ban_members:
+#             result_message = "<b>♾️ Черный список:</b>\n\n"
+#             for idx, banned_user_id in enumerate(ban_members, start=1):
+#                 username = await get_ban_username(banned_user_id)
+#                 username = username.replace("_", "&#95;")
+#                 result_message += f"{idx}. @{username} (<code>{banned_user_id}</code>)\n"
+#         else:
+#             result_message = "<b>Заблокированных пользователей нет. 🚫</b>\n"
+#
+#         result_message += "\n<b>📛 Чтобы добавить/удалить пользователя</b>\n" \
+#                           "/permanent <code>{id}</code>"
+#
+#         await bot.send_message(message.chat.id, result_message, parse_mode="HTML")
+#         return
+#
+#     if user_id in ban_members:
+#         await del_profile_ban_members(profile_user_id, user_id)
+#
+#         username = await get_username(user_id)
+#         username = username.replace("_", "&#95;")
+#
+#         profile = f'<b>🍁 Пользователь</b> @{username} (<code>{user_id}</code>) <b>был удален из черного списка вашего профиля!</b>\n\n' \
+#                   f'<b>♾️ Для просмотра всех заблокированных пользователей напишите /permanent</b>'
+#         await bot.send_message(message.chat.id, profile, parse_mode="HTML")
+#         await state.finish()
+#     else:
+#         await update_profile_ban_members(profile_user_id, user_id)
+#
+#         username = await get_username(user_id)
+#         username = username.replace("_", "&#95;")
+#
+#         profile = f'<b>🍁 Пользователь</b> @{username} (<code>{user_id}</code>) <b>был внесен в черный список вашего профиля!</b>\n\n' \
+#                   f'<b>♾️ Для просмотра всех заблокированных пользователей напишите /permanent</b>'
+#         await bot.send_message(message.chat.id, profile, parse_mode="HTML")
+#         await state.finish()
 
 # Команда промокод
+
 @dp.message_handler(commands=['promo'])
 async def process_promo_command(message: types.Message):
     args = message.get_args()
@@ -2456,6 +2464,25 @@ async def process_promo_list_command(message: types.Message):
                 await message.reply("*❌ Промокод не найден.*", parse_mode="Markdown")
         else:
             await message.reply("*❌ Пожалуйста, укажите идентификатор промокода.*", parse_mode="Markdown")
+
+@dp.message_handler(commands=['help'])
+async def start_contest_command(message: types.Message):
+
+    # Создание и отправка сообщения с кнопками
+    profile = f'*Навигация по боту 💤*\n\n' \
+              f'/start - 🎭 Основное меню, помогает посмотреть свой профиль и активные конкурсы на данный момент, также использовать кнопку `Поддержка 🆘`.\n' \
+              f'/search - 🔎 Поиск конкруса/пользователя, используя его айди.\n' \
+              f'/profile - 👤 Чат-команда для показа своего профиля.\n' \
+              f'/promo - 🧪 Просмтор активных промокодов, также их активация!\n' \
+              f'/contest - 🎖 Меню для создания ваших конкурсов и управлениями ими, доступ к меню получается только через `ключ 🔑`.\n' \
+              f'/generate - 🗝️ Создание/покупка (в будущем) ключа для создания конкурсов!\n\n'
+
+    # Создание кнопки-ссылки "Детальнее"
+    inline_keyboard = types.InlineKeyboardMarkup()
+    inline_keyboard.add(types.InlineKeyboardButton(text="Детальнее ❔", url="https://teletype.in/@kpyr/Flame"))
+
+    await message.reply(profile, parse_mode="Markdown", reply_markup=inline_keyboard)
+
 
 # Кнопки
 @dp.callback_query_handler(lambda callback_query: True)
@@ -2550,7 +2577,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
     elif button_text == 'support':
 
         creator_username = "[@Kpyr](https://t.me/Kpyr_uy)"
-        support = f"🆔 Ваш id: `{user_id}`\n\n/commands - Вызвать список активных команд. 💾\n\n*📱 Контакты для обратной связи:*\n\n*🎭 Создатель бота:* {creator_username}"
+        support = f"🆔 Ваш id: `{user_id}`\n\n/help - Помощь в боте. 💾\n\n*📱 Контакты для обратной связи:*\n\n*🎭 Создатель бота:* {creator_username}"
 
         await callback_query.message.answer(text=support, parse_mode="Markdown")
 
@@ -2747,7 +2774,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
 
                     # Создание и отправка сообщения с кнопками
                     keyboard = types.InlineKeyboardMarkup()
-
+                    confirmation_text = "🎃 Данная функция находиться в разработка и будет выпущена в скором времени!"
                     if total_contests > 0:
                         back_history = types.InlineKeyboardButton(text='Назад 🧿', callback_data='back_history')
                         keyboard.row(back_history)
