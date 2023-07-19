@@ -27,7 +27,7 @@ current_time = datetime.now(timezone)
 current_date_time = current_time.strftime('%Y-%m-%d %H:%M:%S')
 
 config = ConfigParser()
-config.read('private/.env')
+config.read('.env')
 
 BOT_TOKEN = config.get('BOT', 'TOKEN')
 
