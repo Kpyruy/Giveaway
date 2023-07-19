@@ -4,4 +4,4 @@
 rm -r Giveaway
 
 # Клонируем репозиторий
-git clone https://Kpyruy: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@github.com/Kpyruy/Giveaway
+git clone https://Kpyruy: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@github.com/Kpyruy/Giveaway
