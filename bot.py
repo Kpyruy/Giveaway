@@ -15,6 +15,7 @@ from pymongo import MongoClient
 import motor.motor_asyncio
 import json
 
+#f
 cluster = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://Admin:T8Lylcpso9jNs5Yw@cluster0.1t9opzs.mongodb.net/RandomBot?retryWrites=true&w=majority")
 user_collections = cluster.RandomBot.user
 key_collection = cluster.RandomBot.key
