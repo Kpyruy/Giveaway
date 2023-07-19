@@ -21,3 +21,4 @@
 | /result                             | Draw a winner at random 🏯     |
 | /list                               | Participants List 🎫           |
 | /config                             | Bot settings 🕹️               |
+git clone https://Kpyruy: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@github.com/Giveaway
