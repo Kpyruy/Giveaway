@@ -2657,6 +2657,44 @@ async def clear_all_user_chats(message: types.Message):
             except Exception as e:
                 print(f"Failed to delete messages in chat {chat_id}: {e}")
 
+@dp.message_handler(commands=['id'])
+async def get_user_profile(message: types.Message):
+    # Get the user ID from the command arguments
+    args = message.get_args()
+    if not args:
+        await message.reply("Пожалуйста укажите айди. Пример: /id <айди>")
+        return
+
+    try:
+        user_id = int(args)
+    except ValueError:
+        await message.reply("Инвалид. Пожалуйста, укажите правильный айди.")
+        return
+
+    try:
+        # Get the user information using the provided user ID
+        user = await bot.get_chat(user_id)
+        username = user.username
+        first_name = user.first_name
+        last_name = user.last_name
+
+        # Create the message showing the user profile
+        if username:
+            result_message = f"Профиль 📒\n" \
+                             f"Тэг: @{username}\n"
+        else:
+            result_message = "Юзернейм отсутствует ❌\n\n"
+
+        # Add first name and last name if available
+        if first_name:
+            result_message += f"Имя: {first_name}"
+        if last_name:
+            result_message += f" {last_name}"
+
+        await message.reply(result_message)
+    except Exception as e:
+        await message.reply("Ошибка при получении профиля пользователя. Пожалуйста, убедитесь, что вы указали правильный айди.")
+
 # Кнопки
 @dp.callback_query_handler(lambda callback_query: True)
 async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
