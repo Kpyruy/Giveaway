@@ -379,7 +379,7 @@ async def show_user_history(callback_query, user_id, current_page):
     else:
         result_message = "*📒 У вас не была обнаружена история участий!*"
         keyboard = types.InlineKeyboardMarkup()
-        back = types.InlineKeyboardButton(text='Назад 🥏', callback_data=f'profile')
+        back = types.InlineKeyboardButton(text='Назад 🥏', callback_data='profile_edit')
         keyboard.row(back)
 
         # Send or edit the message with pagination
