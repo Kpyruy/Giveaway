@@ -315,6 +315,125 @@ async def show_ban_members(callback_query, contest_id, current_page):
     # Сохранение ID сообщения в глобальную переменную
     change_message_id.append(reply.message_id)
 
+async def show_user_history(callback_query, user_id, current_page):
+    # Retrieve contests where the user with the specified user_id was a member
+    user_history = await contests_collection.find({"members": user_id}).to_list(length=None)
+
+    if user_history:
+        # Your logic to display user history based on the current_page
+        per_page = 5
+        start_index = (current_page - 1) * per_page
+        end_index = current_page * per_page
+        page_history = user_history[start_index:end_index] if start_index < len(user_history) else []
+        all_pages = len(user_history) // per_page
+
+        if all_pages == 0:
+            all_pages = 1
+        else:
+            pass
+        # Create the message containing the user history for the current page
+        result_message = f"*📒 История участий - Страница* `{current_page}` из `{all_pages}`:\n\n"
+        for idx, contest in enumerate(page_history, start=start_index + 1):
+            # Extract relevant information about the contest, e.g., its title, end date, etc.
+            contest_name = contest.get("contest_name")
+            contest_id = contest.get("_id")
+            contest_end_date = contest.get("end_date")
+            contest_members = contest.get("members")
+            if contest_name == str(contest_id):
+                # Format the contest information as needed
+                result_message += f"                            *= {idx} =*\n" \
+                                  f"*🪁 Имя:* `{contest_name}`\n" \
+                                  f"*👤 Количество участников:* `{len(contest_members)}`\n" \
+                                  f"*🗓️ Дата окончания:* `{contest_end_date}`\n\n"
+            else:
+                # Format the contest information as needed
+                result_message += f"                            *= {idx} =*\n" \
+                                  f"*🪁 Имя:* `{contest_name}`\n" \
+                                  f"*🧊 Идентификатор:* `{contest_id}`\n" \
+                                  f"*👤 Количество участников:* `{len(contest_members)}`\n" \
+                                  f"*🗓️ Дата окончания:* `{contest_end_date}`\n\n"
+
+        # Calculate the total number of pages
+        total_pages = (len(user_history) + per_page - 1) // per_page
+
+        # Create the inline keyboard with pagination buttons
+        keyboard = types.InlineKeyboardMarkup()
+        prev_button = types.InlineKeyboardButton(text='◀️ Предыдущая', callback_data=f'history_{user_id}_prev_{current_page}')
+        next_button = types.InlineKeyboardButton(text='Следущая ▶️', callback_data=f'history_{user_id}_next_{current_page}')
+
+        if current_page > 1 and end_index < total_pages:
+            keyboard.row(prev_button, next_button)
+        elif current_page > 1:
+            keyboard.row(prev_button)
+        elif current_page < total_pages:
+            keyboard.row(next_button)
+        back = types.InlineKeyboardButton(text='Назад 🥏', callback_data='profile_edit')
+        keyboard.row(back)
+
+        # Send or edit the message with pagination
+        reply = await bot.edit_message_text(result_message, callback_query.message.chat.id,
+                                            callback_query.message.message_id, parse_mode="Markdown", reply_markup=keyboard)
+        profile_messages.append(reply.message_id)
+    else:
+        result_message = "*📒 У вас не была обнаружена история участий!*"
+        keyboard = types.InlineKeyboardMarkup()
+        back = types.InlineKeyboardButton(text='Назад 🥏', callback_data=f'profile')
+        keyboard.row(back)
+
+        # Send or edit the message with pagination
+        reply = await bot.edit_message_text(result_message, callback_query.message.chat.id,
+                                            callback_query.message.message_id, parse_mode="Markdown", reply_markup=keyboard)
+        profile_messages.append(reply.message_id)
+
+async def promo_members(callback_query, promo, current_page):
+    # Поиск конкурса по айди
+    contest = await promo_collection.find_one({"_id": promo})
+    message_id = change_message_id[-1]
+
+    members = contest.get("members")
+    participants_word = format_participants(len(members))
+    result_message = f"<b>🏯 Всего</b> <code>{len(members)}</code> <b>{participants_word}</b> — <b>Страница {current_page}</b>\n\n"
+
+    keyboard = types.InlineKeyboardMarkup()
+
+    # Количество участников на одной странице
+    per_page = 25
+    start_index = (current_page - 1) * per_page
+    end_index = current_page * per_page
+    page_members = members[start_index:end_index] if start_index < len(members) else []
+    for idx, user_id in enumerate(page_members, start=start_index + 1):
+        username = await get_username(user_id)
+        username = username.replace("_", "&#95;")
+        result_message += f"{idx}. @{username} (<code>{user_id}</code>)\n"
+
+    # Кнопки перелистывания
+    prev_button = types.InlineKeyboardButton(text='◀️ Назад', callback_data=f'members_{contest_id}_prev_{current_page}')
+    next_button = types.InlineKeyboardButton(text='Вперед ▶️', callback_data=f'members_{contest_id}_next_{current_page}')
+    contest_profile = types.InlineKeyboardButton(text='Детальнее 🧶', callback_data=f'contest_search_profile_{contest_id}')
+    banned_members = types.InlineKeyboardButton(text='Заблок. участники ‼️', callback_data=f'ban_members_{contest_id}_None_1')
+    back = types.InlineKeyboardButton(text='Назад 🧿', callback_data='change')
+
+    # Add both buttons if there are both previous and next pages
+    if current_page > 1 and end_index < len(members):
+        keyboard.row(prev_button, next_button)
+    # Add only the previous button if there are no more pages
+    elif current_page > 1:
+        keyboard.row(prev_button)
+    # Add only the next button if this is the first page
+    elif end_index < len(members):
+        keyboard.row(next_button)
+
+    if len(members) >= 1:
+        keyboard.row(banned_members, contest_profile)
+    keyboard.row(back)
+
+    reply = await bot.edit_message_text(result_message, callback_query.message.chat.id, message_id,
+                                        parse_mode="HTML",
+                                        reply_markup=keyboard)
+
+    # Сохранение ID сообщения в глобальную переменную
+    change_message_id.append(reply.message_id)
+
 async def handle_promo_code(promo_code: str, user_id: int):
     promo = await promo_collection.find_one({"_id": promo_code})
 
@@ -605,7 +724,7 @@ async def generate_command(message: types.Message):
     user_id = message.from_user.id
     user_data = await user_collections.find_one({"_id": user_id})
 
-    if user_data and ("status" in user_data and user_data["status"] in ["Тестер ✨", "Админ 🚗", "Создатель 🎭"]):
+    if user_data and ("status" in user_data and user_data["status"] in ["Админ 🚗", "Создатель 🎭"]):
         # Если пользователь ввел команду с аргументом (числом)
         if len(message.get_args()) > 0:
             arg = message.get_args()
@@ -1258,13 +1377,6 @@ async def search_callback(callback_query: types.CallbackQuery, state: FSMContext
 async def decline_search_callback(callback_query: types.CallbackQuery, state: FSMContext):
     await callback_query.answer()
     await state.finish()
-    prev_message_id = (await state.get_data()).get('prev_message_id')
-    if prev_message_id:
-        await bot.delete_message(callback_query.message.chat.id, prev_message_id)
-
-    global profile_messages
-
-    message_id = profile_messages[-1]
 
     user_id = callback_query.from_user.id
     user_data = await user_collections.find_one({"_id": user_id})
@@ -1285,11 +1397,9 @@ async def decline_search_callback(callback_query: types.CallbackQuery, state: FS
         keyboard.add(history, id_check)
         keyboard.add(done)
 
-        reply = await bot.edit_message_text(profile, callback_query.message.chat.id, message_id, parse_mode="Markdown",
-                                    reply_markup=keyboard)
-
-        # Сохранение ID сообщения в глобальную переменную
-        profile_messages.append(reply.message_id)
+        reply = await bot.edit_message_text(profile, callback_query.message.chat.id,
+                                            callback_query.message.message_id, parse_mode="Markdown",
+                                            reply_markup=keyboard)
     else:
         # Обработка случая, когда данные о пользователе не найдены
         reply = await message.reply("☠️ Профиль пользователя не найден.")
@@ -1400,7 +1510,7 @@ async def decline_search_callback(callback_query: types.CallbackQuery, state: FS
                 result_message += f"*🪁 Имя:* `{contest_name}`\n" \
                                   f"*🧊 Айди конкурса* `{contest_id}`*:*\n" \
                                   f"*🏯 Количество участников:* `{members_message}`" \
-                                  f"*===================================================*\n\n"
+                                  f"*·*\n"
 
         keyboard = types.InlineKeyboardMarkup()
         decline_create = types.InlineKeyboardButton(text='Назад 🧿', callback_data='decline_create')
@@ -2227,7 +2337,8 @@ async def process_search_command(message: types.Message, state: FSMContext):
         status = user_data.get("status", "")
 
         profile = f'*🍹 Профиль пользователя* `{user_id}`:\n\n*🍧 Статус:* `{status}`\n\n*🏅 Победы в конкурсах:* `{wins}`\n*🍀 Участие в конкурсах:* `{participation}`\n*📅 Дата регистрации:* `{creation_date}`'
-
+        await bot.send_chat_action(user_id, action="typing")
+        await asyncio.sleep(0.5)
         await bot.send_message(message.chat.id, profile, parse_mode="Markdown")
         await state.finish()
     else:
@@ -2269,7 +2380,9 @@ async def process_search_command(message: types.Message, state: FSMContext):
                                      f"<b>🎖️ Количество победителей:</b> <code>{winners}</code>\n" \
                                      f"<b>👤 Количество участников:</b> <code>{members_message}</code>\n" \
                                      f"<b>📆 Дата окончания:</b> <code>{end_date}</code>"
-
+                user_id = message.from_user.id
+                await bot.send_chat_action(user_id, action="typing")
+                await asyncio.sleep(0.5)
                 await bot.send_message(message.chat.id, result_message, parse_mode="HTML")
             else:
                 await bot.send_message(message.chat.id,
@@ -2299,7 +2412,8 @@ async def start_contest_command(message: types.Message):
 
             # Создание и отправка сообщения с кнопками
             profile = f'*🍹 Профиль пользователя* `{username}`:\n\n*🍧 Статус:* `{status}`\n\n*🏅 Победы в конкурсах:* `{wins}`\n*🍀 Участие в конкурсах:* `{participation}`\n*📅 Дата регистрации:* `{creation_date}`'
-
+            await bot.send_chat_action(user_id, action="typing")
+            await asyncio.sleep(0.5)
             reply = await message.reply(profile, parse_mode="Markdown")
         else:
             # Обработка случая, когда данные о пользователе не найдены
@@ -2487,7 +2601,10 @@ async def process_promo_list_command(message: types.Message):
 
 @dp.message_handler(commands=['help'])
 async def start_contest_command(message: types.Message):
+    user_id = message.from_user.id
 
+    await bot.send_chat_action(user_id, action="typing")
+    await asyncio.sleep(0.7)
     # Создание и отправка сообщения с кнопками
     profile = f'*Навигация по боту 💤*\n\n' \
               f'/start - 🎭 Основное меню, помогает посмотреть свой профиль и активные конкурсы на данный момент, также использовать кнопку `Поддержка 🆘`.\n' \
@@ -2524,7 +2641,6 @@ async def clear_all_user_chats(message: types.Message):
                     await bot.delete_message(chat_id, msg_id)
             except Exception as e:
                 print(f"Failed to delete messages in chat {chat_id}: {e}")
-
 
 # Кнопки
 @dp.callback_query_handler(lambda callback_query: True)
@@ -2601,7 +2717,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             # Создание и отправка сообщения с кнопками
             profile = f'*🍹 Профиль пользователя* `{username}`:\n\n*🍧 Статус:* `{status}`\n\n*🏅 Победы в конкурсах:* `{wins}`\n*🍀 Участие в конкурсах:* `{participation}`\n*📅 Дата регистрации:* `{creation_date}`'
             keyboard = types.InlineKeyboardMarkup()
-            history = types.InlineKeyboardButton(text='История участий 📔', callback_data='history')
+            history = types.InlineKeyboardButton(text='История участий 📔', callback_data=f'history_{user_id}_None_1')
             id_check = types.InlineKeyboardButton(text='Поиск пользователя 🥏', callback_data='id_check')
             done = types.InlineKeyboardButton(text='Готово ✅', callback_data='done')
             keyboard.add(history, id_check)
@@ -2615,6 +2731,33 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
 
         # Сохранение ID сообщения в глобальную переменную
         profile_messages.append(reply.message_id)
+
+    elif button_text == 'profile_edit':
+
+        user_id = callback_query.from_user.id
+
+        # Поиск данных о пользователе в базе данных
+        user_data = await user_collections.find_one({"_id": user_id})
+
+        username = callback_query.from_user.username
+        wins = user_data.get("wins", 0)
+        participation = user_data.get("participation", 0)
+        creation_date = user_data.get("creation_date", "")
+        status = user_data.get("status", "")
+
+        # Создание и отправка сообщения с кнопками
+        profile = f'*🍹 Профиль пользователя* `{username}`:\n\n*🍧 Статус:* `{status}`\n\n*🏅 Победы в конкурсах:* `{wins}`\n*🍀 Участие в конкурсах:* `{participation}`\n*📅 Дата регистрации:* `{creation_date}`'
+        keyboard = types.InlineKeyboardMarkup()
+        history = types.InlineKeyboardButton(text='История участий 📔', callback_data=f'history_{user_id}_None_1')
+        id_check = types.InlineKeyboardButton(text='Поиск пользователя 🥏', callback_data='id_check')
+        done = types.InlineKeyboardButton(text='Готово ✅', callback_data='done')
+        keyboard.add(history, id_check)
+        keyboard.add(done)
+
+        # Send or edit the message with pagination
+        await bot.edit_message_text(profile, callback_query.message.chat.id,
+                                                callback_query.message.message_id, parse_mode="Markdown",
+                                                reply_markup=keyboard)
 
     elif button_text == 'support':
 
@@ -2767,77 +2910,23 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             # Сохранение ID сообщения в глобальную переменную
             contest_messages.append(reply.message_id)
 
-    elif button_text == 'history':
-
-        message_id = profile_messages[-1]
+    elif button_text.startswith('history'):
         user_id = callback_query.from_user.id
 
-        # Поиск конкурсов, в которых пользователь является участником
-        user_contests = await contests_collection.find({"members": user_id}).to_list(length=None)
-
-        # Проверка наличия истории участий
-        if user_contests:
-
-            # Формирование истории участий
-            user_history = []
-
-            for contest in user_contests:
-
-                contest_id = contest.get("_id")
-                members = contest.get("members")
-                end_date = contest.get("end_date")
-                ended = contest.get("ended")
-                num_members = len(members)
-
-                # Проверка параметра ended конкурса
-                if ended:
-                    contest_text = f"🍭 Конкурс: `{contest_id}`\n" \
-                                   f"👥 Количество участников: `{num_members}`\n" \
-                                   f"🗓 Дата окончания: `{end_date}`\n\n" \
-                                   f"======================================================\n"
-                    user_history.append(contest_text)
-
-                    # Обновление общего количества конкурсов в истории
-                    total_contests = len(user_history)
-
-                    # Установка начального индекса и количества конкурсов, которые будут отображаться на каждой странице
-                    page_size = 50
-                    start_index = 0
-                    end_index = start_index + page_size
-
-                    # Проверка параметра ended конкурса
-                    if ended:
-                        # Получение текущей истории на основе начального и конечного индексов
-                        current_history = user_history[start_index:end_index]
-
-                        # Формирование текста истории для текущей страницы
-                        confirmation_text = f"*📔 История участий пользователя* `{user_id}` *({start_index + 1} - {end_index} из {total_contests}):*\n\n"
-                        confirmation_text += "\n".join(current_history)
-
-                    # Создание и отправка сообщения с кнопками
-                    keyboard = types.InlineKeyboardMarkup()
-                    confirmation_text = "🎃 Данная функция находиться в разработка и будет выпущена в скором времени!"
-                    if total_contests > 0:
-                        back_history = types.InlineKeyboardButton(text='Назад 🧿', callback_data='back_history')
-                        keyboard.row(back_history)
-
-                        reply = await bot.edit_message_text(confirmation_text, callback_query.message.chat.id,
-                                                            message_id,
-                                                            parse_mode="Markdown", reply_markup=keyboard)
-
-                        # Сохранение ID сообщения в глобальную переменную
-                        contest_messages.append(reply.message_id)
+        parts = button_text.split('_')
+        if user_id:
+            pass
         else:
-            # Создание и отправка сообщения с кнопками
-            keyboard = types.InlineKeyboardMarkup()
-            back_history = types.InlineKeyboardButton(text='Назад 🧿', callback_data='back_history')
-            keyboard.row(back_history)
+            user_id = int(parts[1])
+        action = parts[2]
+        current_page = int(parts[3])
 
-            reply = await bot.edit_message_text("*📔 У вас пока нет истории участий.*", callback_query.message.chat.id,
-                                                    message_id, parse_mode="Markdown", reply_markup=keyboard)
+        if action == 'prev':
+            current_page -= 1
+        elif action == 'next':
+            current_page += 1
 
-            # Сохранение ID сообщения в глобальную переменную
-            contest_messages.append(reply.message_id)
+        await show_user_history(callback_query, user_id, current_page)
 
     elif button_text == 'back_history':
 
@@ -2880,18 +2969,21 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
 
         # Поиск конкурса по айди
         contests = await contests_collection.find({"owner_id": user_id}).to_list(length=None)
+
         message_id = contest_messages[-1]
+
         if contests:
             # Создаем переменную для хранения сообщения с активными конкурсами
             result_message = "*🎯 Ваши активные конкурсы:*\n\n"
 
-            # Итерация по каждому конкурсу
-            for contest in contests:
+            # Итерация по каждому конкурсу с помощью enumerate
+            for idx, contest in enumerate(contests, start=1):
                 # Извлечение необходимых данных из найденного конкурса
                 contest_id = contest.get("_id")
                 contest_name = contest.get("contest_name")
                 members = contest.get("members")
                 ended = contest.get("ended")
+
                 if ended == "True":
                     pass
                 else:
@@ -2899,40 +2991,29 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                         members_count = len(members)
                     else:
                         members_count = 0
-
                     if members_count > 0:
                         members_message = f"{members_count}"
                     else:
                         members_message = "0"
 
-                    # Формирование сообщения с данными конкурса
-                    result_message += f"*🪁 Имя:* `{contest_name}`\n" \
+                    # Формирование сообщения с данными конкурса и включение индекса
+                    result_message += f"                            *= {idx} =*\n" \
+                                      f"*🪁 Имя:* `{contest_name}`\n" \
                                       f"*🧊 Айди конкурса* `{contest_id}`*:*\n" \
-                                      f"*🏯 Количество участников:* `{members_message}`" \
-                                      f"*===================================================*\n\n"
+                                      f"*🏯 Количество участников:* `{members_message}`\n\n"
+                    keyboard = types.InlineKeyboardMarkup()
 
-            keyboard = types.InlineKeyboardMarkup()
-            decline_create = types.InlineKeyboardButton(text='Назад 🧿', callback_data='decline_create')
-            contest_check = types.InlineKeyboardButton(text='Управление 🧧', callback_data='contest_check')
-            keyboard.row(contest_check)
-            keyboard.row(decline_create)
+        decline_create = types.InlineKeyboardButton(text='Назад 🧿', callback_data='decline_create')
+        contest_check = types.InlineKeyboardButton(text='Управление 🧧', callback_data='contest_check')
 
-            reply = await bot.edit_message_text(result_message, callback_query.message.chat.id, message_id,
-                                                parse_mode="Markdown",
-                                                reply_markup=keyboard)
+        keyboard.row(contest_check)
+        keyboard.row(decline_create)
+        reply = await bot.edit_message_text(result_message, callback_query.message.chat.id, message_id,
+                                            parse_mode="Markdown",
+                                            reply_markup=keyboard)
 
-            # Сохранение ID сообщения в глобальную переменную
-            change_message_id.append(reply.message_id)
-        else:
-            keyboard = types.InlineKeyboardMarkup()
-            decline_create = types.InlineKeyboardButton(text='Назад 🧿', callback_data='decline_create')
-            keyboard.row(decline_create)
-
-            int_digit = await bot.edit_message_text("*У вас не обнаружено активных конкурсов‼️*",
-                                                    callback_query.message.chat.id, message_id,
-                                                    parse_mode="Markdown",
-                                                    reply_markup=keyboard)
-            change_message_id.append(int_digit.message_id)
+        # Сохранение ID сообщения в глобальную переменную
+        change_message_id.append(reply.message_id)
 
     elif button_text == 'contest_check':
 
