@@ -3546,6 +3546,8 @@ async def perform_contest_draw(contest_id):
     # Сохранение ID сообщения в глобальную переменную
     change_message_id.append(reply.message_id)
 
+timezone = pytz.timezone('Europe/Kiev')
+
 async def check_and_perform_contest_draw():
     while True:
         current_time = datetime.now(timezone)
@@ -3564,16 +3566,13 @@ async def check_and_perform_contest_draw():
                     pass
                 else:
                     try:
-                        # Преобразование времени окончания в объект datetime
-                        end_date = datetime.strptime(str(end_date_str), "%d.%m.%Y %H:%M")
+                        # Преобразование времени окончания в объект datetime с учетом часового пояса
+                        end_date = timezone.localize(datetime.strptime(str(end_date_str), "%d.%m.%Y %H:%M"))
                         # Сравнение текущего времени с временем окончания
                         if current_time >= end_date:
                             await perform_contest_draw(contest_id)
                     except ValueError:
                         pass
-
-        # Пауза на 10 секунд
-        await asyncio.sleep(10)
 
 async def main():
     # Запуск бота
