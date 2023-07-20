@@ -10,6 +10,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.dispatcher.filters import Command
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.utils import executor
 from configparser import ConfigParser
 from pymongo import MongoClient
 import motor.motor_asyncio
@@ -64,14 +65,14 @@ def format_participants(members):
         return "участников"
 
 async def add_user(user_id):
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone).strftime("%Y-%m-%d")
     user_data = {
         "_id": user_id,
         "creation_date": current_date,
         "participation": 0,
         "wins": 0,
         "status": "Новичок 🆕",
-        "keys": "0",
+        "keys": 0,
         "ban_members": []
     }
     user_collections.insert_one(user_data)
@@ -112,8 +113,15 @@ async def update_status(user_id):
 
     await user_collections.update_one({"_id": user_id}, {"$set": {"status": status}})
 
+# Get the bot's username from the bot instance
+async def get_bot_username() -> str:
+    bot_info = await bot.get_me()
+    return bot_info.username
+
+# Now you can generate the start link using the bot's username
 async def generate_start_link(contest_id):
-    start_link = f"t.me/lzr_randombot?start={contest_id}"
+    bot_username = await get_bot_username()
+    start_link = f"t.me/{bot_username}?start={contest_id}"
     return start_link
 
 async def create_contest(contest_id, user_id, contest_name, contest_description, winners, end_date, start_link):
@@ -139,9 +147,11 @@ async def update_contest_members(contest_id, user_id):
     )
 
 async def update_contest_date(contest_id):
+    current_date = datetime.now(timezone).strftime("%Y-%m-%d")
+
     await contests_collection.update_one(
         {"_id": int(contest_id)},
-        {"$addToSet": {"join_date": current_date_time}}
+        {"$addToSet": {"join_date": current_date}}
     )
 
 async def update_contest_ban_members(contest_id, user_id):
@@ -1186,38 +1196,41 @@ async def process_search(message: types.Message, state: FSMContext):
     message_id = contest_messages[-1]
 
     if contest:
-        # Извлечение необходимых данных из найденного конкурса
         contest_id = contest.get("_id")
         contest_name = contest.get("contest_name")
         owner_id = contest.get("owner_id")
         contest_description = contest.get("contest_description")
         members = contest.get("members")
         end_date = contest.get("end_date")
+        members_message = len(members)
+        winners = contest.get("winners", 0)
+        contest_winners = contest.get("contest_winners")
 
-        if members:
-            members_count = len(members)
+        if contest_winners:
+
+            contest_winners_list = "\n".join(
+                [f"<b>{idx}.</b> @{await get_username_winners(user)} — <code>{user}</code>" for idx, user in
+                 enumerate(contest_winners, start=1)])
+            result_message = f"<b>🔎 Результаты поиска конкурса </b> <code>{contest_id}</code><b>:</b>\n\n" \
+                             f"<b>🍙 Автор:</b> <code>{owner_id}</code>\n" \
+                             f"<b>🧊 Идентификатор:</b> <code>{contest_id}</code>\n" \
+                             f"<b>🪁 Имя:</b> <code>{contest_name}</code>\n" \
+                             f"<b>🎗️ Описание:</b> <i>{contest_description}</i>\n" \
+                             f"<b>🎖️ Количество победителей:</b> <code>{winners}</code>\n" \
+                             f"<b>👤 Количество участников:</b> <code>{members_message}</code>\n" \
+                             f"<b>🏆 Победители:</b> \n{contest_winners_list}\n" \
+                             f"<b>📆 Дата окончания:</b> <code>{end_date}</code>"
         else:
-            members_count = 0
+            result_message = f"<b>🔎 Результаты поиска конкурса </b> <code>{contest_id}</code><b>:</b>\n\n" \
+                             f"<b>🍙 Автор:</b> <code>{owner_id}</code>\n" \
+                             f"<b>🧊 Идентификатор:</b> <code>{contest_id}</code>\n" \
+                             f"<b>🪁 Имя:</b> <code>{contest_name}</code>\n" \
+                             f"<b>🎗️ Описание:</b> <i>{contest_description}</i>\n" \
+                             f"<b>🎖️ Количество победителей:</b> <code>{winners}</code>\n" \
+                             f"<b>👤 Количество участников:</b> <code>{members_message}</code>\n" \
+                             f"<b>📆 Дата окончания:</b> <code>{end_date}</code>"
 
-        if members_count > 0:
-            members_message = f"{members_count}"
-        else:
-            members_message = "0"
-
-        # Формирование сообщения с данными конкурса
-        result_message = f"*🔎 Результаты поиска конкурса* `{contest_id}`*:*\n\n" \
-                         f"*🍙 Автор:* `{owner_id}`\n" \
-                         f"*🪁 Имя:* `{contest_name}`\n" \
-                         f"*🎗️ Описание:* _{contest_description}_\n" \
-                         f"*👤 Количество участников:* `{members_message}`\n\n" \
-                         f"*📆 Дата окончания:* `{end_date}`" \
-
-        keyboard = types.InlineKeyboardMarkup()
-        back_search = types.InlineKeyboardButton(text='Назад 🧿', callback_data='back_search')
-        input_id = types.InlineKeyboardButton(text='Искать ещё 🔎', callback_data='search')
-        keyboard.row(back_search, input_id)
-
-        reply = await bot.edit_message_text(result_message, message.chat.id, message_id, parse_mode="Markdown",
+        reply = await bot.edit_message_text(result_message, message.chat.id, message_id, parse_mode="HTML",
                                     reply_markup=keyboard)
         await state.finish()
 
@@ -1369,22 +1382,25 @@ async def decline_search_callback(callback_query: types.CallbackQuery, state: FS
             contest_id = contest.get("_id")
             contest_name = contest.get("contest_name")
             members = contest.get("members")
-
-            if members:
-                members_count = len(members)
+            ended = contest.get("ended")
+            if ended == "True":
+                pass
             else:
-                members_count = 0
+                if members:
+                    members_count = len(members)
+                else:
+                    members_count = 0
 
-            if members_count > 0:
-                members_message = f"{members_count}"
-            else:
-                members_message = "0"
+                if members_count > 0:
+                    members_message = f"{members_count}"
+                else:
+                    members_message = "0"
 
-            # Формирование сообщения с данными конкурса
-            result_message += f"*🪁 Имя:* `{contest_name}`\n" \
-                              f"*🧊 Айди конкурса* `{contest_id}`*:*\n" \
-                              f"*🏯 Количество участников:* `{members_message}`" \
-                              f"*===================================================*\n\n"
+                # Формирование сообщения с данными конкурса
+                result_message += f"*🪁 Имя:* `{contest_name}`\n" \
+                                  f"*🧊 Айди конкурса* `{contest_id}`*:*\n" \
+                                  f"*🏯 Количество участников:* `{members_message}`" \
+                                  f"*===================================================*\n\n"
 
         keyboard = types.InlineKeyboardMarkup()
         decline_create = types.InlineKeyboardButton(text='Назад 🧿', callback_data='decline_create')
@@ -1399,6 +1415,10 @@ async def decline_search_callback(callback_query: types.CallbackQuery, state: FS
         # Сохранение ID сообщения в глобальную переменную
         change_message_id.append(reply.message_id)
     else:
+        keyboard = types.InlineKeyboardMarkup()
+        decline_create = types.InlineKeyboardButton(text='Назад 🧿', callback_data='decline_create')
+        keyboard.row(decline_create)
+
         int_digit = await bot.edit_message_text("*У вас не обнаружено активных конкурсов‼️*",
                                                 callback_query.message.chat.id, message_id,
                                                 parse_mode="Markdown",
@@ -2471,17 +2491,39 @@ async def start_contest_command(message: types.Message):
     # Создание и отправка сообщения с кнопками
     profile = f'*Навигация по боту 💤*\n\n' \
               f'/start - 🎭 Основное меню, помогает посмотреть свой профиль и активные конкурсы на данный момент, также использовать кнопку `Поддержка 🆘`.\n' \
-              f'/search - 🔎 Поиск конкруса/пользователя, используя его айди.\n' \
+              f'/search - 🔎 Поиск конкурса/пользователя, используя его айди.\n' \
               f'/profile - 👤 Чат-команда для показа своего профиля.\n' \
               f'/promo - 🧪 Просмтор активных промокодов, также их активация!\n' \
               f'/contest - 🎖 Меню для создания ваших конкурсов и управлениями ими, доступ к меню получается только через `ключ 🔑`.\n' \
-              f'/generate - 🗝️ Создание/покупка (в будущем) ключа для создания конкурсов!\n\n'
+              f'/generate - 🗝️ Создание/покупка (в будущем) ключа для формирования конкурсов!\n\n'
 
     # Создание кнопки-ссылки "Детальнее"
     inline_keyboard = types.InlineKeyboardMarkup()
     inline_keyboard.add(types.InlineKeyboardButton(text="Детальнее ❔", url="https://teletype.in/@kpyr/Flame"))
 
     await message.reply(profile, parse_mode="Markdown", reply_markup=inline_keyboard)
+
+# Обработчик команды для очистки личных чатов с пользователями
+@dp.message_handler(commands=['clear_all_chats'])
+async def clear_all_user_chats(message: types.Message):
+    # Get all _id users from the database
+    all_user_data = await user_collections.find(projection={"_id": 1}).to_list(length=None)
+
+    if all_user_data:
+        chat_id_list = [user_data["_id"] for user_data in all_user_data]
+
+        for chat_id in chat_id_list:
+            # Wait a while before deleting the next chat (about 1 second)
+            await asyncio.sleep(0.1)
+
+            try:
+                # You need to keep track of the message_id when the bot sends a message
+                # Here messages is a list or other data structure that holds all the stored message IDs
+                messages = get_list_of_message_ids_for_this_chat_id(chat_id)
+                for msg_id in messages:
+                    await bot.delete_message(chat_id, msg_id)
+            except Exception as e:
+                print(f"Failed to delete messages in chat {chat_id}: {e}")
 
 
 # Кнопки
@@ -3506,7 +3548,7 @@ async def perform_contest_draw(contest_id):
 
 async def check_and_perform_contest_draw():
     while True:
-        current_time = datetime.now()
+        current_time = datetime.now(timezone)
 
         # Получение всех конкурсов
         contests = await contests_collection.find().to_list(length=None)
