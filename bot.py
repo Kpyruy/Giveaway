@@ -235,7 +235,8 @@ async def show_members(callback_query, contest_id, current_page):
     page_members = members[start_index:end_index] if start_index < len(members) else []
     for idx, user_id in enumerate(page_members, start=start_index + 1):
         username = await get_username(user_id)
-        username = username.replace("_", "&#95;")
+        if username:
+            username = username.replace("_", "&#95;")
         result_message += f"{idx}. @{username} (<code>{user_id}</code>)\n"
 
     # Кнопки перелистывания
@@ -283,7 +284,8 @@ async def show_ban_members(callback_query, contest_id, current_page):
     page_members = ban_members[start_index:end_index] if start_index < len(ban_members) else []
     for idx, user_id in enumerate(page_members, start=start_index + 1):
         username = await get_username(user_id)
-        username = username.replace("_", "&#95;")
+        if username:
+            username = username.replace("_", "&#95;")
         result_message += f"{idx}. @{username} (<code>{user_id}</code>)\n"
 
     # Кнопки перелистывания
@@ -402,7 +404,8 @@ async def promo_members(chat_id, promo, current_page):
     page_members = members[start_index:end_index] if start_index < len(members) else []
     for idx, user_id in enumerate(page_members, start=start_index + 1):
         username = await get_username(user_id)
-        username = username.replace("_", "&#95;")
+        if username:
+            username = username.replace("_", "&#95;")
         result_message += f"<b>{idx}.</b> @{username} <b>(</b><code>{user_id}</code><b>)</b>\n"
 
     # Кнопки перелистывания
@@ -1577,7 +1580,8 @@ async def process_search(message: types.Message, state: FSMContext):
             message_id = change_message_id[-1]
 
             username = await get_username(search_user_id)
-            username = username.replace("_", "&#95;")
+            if username:
+                username = username.replace("_", "&#95;")
             if search_user_id in ban_members:
                 # Формирование сообщения с данными пользователя
                 result_message = f"<b>🧶Пользователь:</b> <code>{search_user_id}</code>\n" \
@@ -1612,7 +1616,8 @@ async def process_search(message: types.Message, state: FSMContext):
             message_id = change_message_id[-1]
 
             username = await get_username(search_user_id)
-            username = username.replace("_", "&#95;")
+            if username:
+                username = username.replace("_", "&#95;")
 
             # Формирование сообщения с данными пользователя
             result_message = f"<b>🧶Пользователь:</b> <code>{search_user_id}</code>\n" \
@@ -2445,7 +2450,8 @@ async def start_contest_command(message: types.Message):
 #             result_message = "<b>♾️ Черный список:</b>\n\n"
 #             for idx, banned_user_id in enumerate(ban_members, start=1):
 #                 username = await get_ban_username(banned_user_id)
-#                 username = username.replace("_", "&#95;")
+#                 if username:
+#                     username = username.replace("_", "&#95;")
 #                 result_message += f"{idx}. @{username} (<code>{banned_user_id}</code>)\n"
 #         else:
 #             result_message = "<b>Заблокированных пользователей нет. 🚫</b>\n"
@@ -2489,7 +2495,8 @@ async def start_contest_command(message: types.Message):
 #             result_message = "<b>♾️ Черный список:</b>\n\n"
 #             for idx, banned_user_id in enumerate(ban_members, start=1):
 #                 username = await get_ban_username(banned_user_id)
-#                 username = username.replace("_", "&#95;")
+#                 if username:
+#                     username = username.replace("_", "&#95;")
 #                 result_message += f"{idx}. @{username} (<code>{banned_user_id}</code>)\n"
 #         else:
 #             result_message = "<b>Заблокированных пользователей нет. 🚫</b>\n"
@@ -2503,8 +2510,9 @@ async def start_contest_command(message: types.Message):
 #     if user_id in ban_members:
 #         await del_profile_ban_members(profile_user_id, user_id)
 #
-#         username = await get_username(user_id)
-#         username = username.replace("_", "&#95;")
+            # username = await get_username(user_id)
+            # if username:
+            #     username = username.replace("_", "&#95;")
 #
 #         profile = f'<b>🍁 Пользователь</b> @{username} (<code>{user_id}</code>) <b>был удален из черного списка вашего профиля!</b>\n\n' \
 #                   f'<b>♾️ Для просмотра всех заблокированных пользователей напишите /permanent</b>'
@@ -2513,8 +2521,9 @@ async def start_contest_command(message: types.Message):
 #     else:
 #         await update_profile_ban_members(profile_user_id, user_id)
 #
-#         username = await get_username(user_id)
-#         username = username.replace("_", "&#95;")
+        # username = await get_username(user_id)
+        # if username:
+        #     username = username.replace("_", "&#95;")
 #
 #         profile = f'<b>🍁 Пользователь</b> @{username} (<code>{user_id}</code>) <b>был внесен в черный список вашего профиля!</b>\n\n' \
 #                   f'<b>♾️ Для просмотра всех заблокированных пользователей напишите /permanent</b>'
@@ -3244,8 +3253,10 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             for idx, winner in enumerate(random_winners, start=1):
                 user_id = winner
                 username = await get_username(user_id)
-                formatted_username = username.replace("_", "&#95;")
-
+                if username:
+                    formatted_username = username.replace("_", "&#95;")
+                else:
+                    formatted_username = "None"
                 result_message += f"<b>{idx}.</b> @{formatted_username} <b>—</b> <code>{winner}</code>\n"
                 share_message += f"**{idx}.** @{username} — `{user_id}`\n"
 
@@ -3271,7 +3282,10 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             user_id = random_winners[0]
 
             username = await get_username(user_id)
-            formatted_username = username.replace("_", "&#95;")
+            if username:
+                formatted_username = username.replace("_", "&#95;")
+            else:
+                formatted_username = "None"
 
             result_message += f"@{formatted_username} <b>—</b> <code>{user_id}</code>"
             share_message = f"** - Конкурс бот 🎭**\n\n**🎖️ Победитель конкурса** `{contest_id}`:\n" \
@@ -3378,7 +3392,8 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                 message_id = change_message_id[-1]
 
                 username = await get_username(search_user_id)
-                username = username.replace("_", "&#95;")
+                if username:
+                    username = username.replace("_", "&#95;")
 
                 # Формирование сообщения с данными пользователя
                 result_message = f"<b>🧶Пользователь:</b> <code>{search_user_id}</code>\n" \
@@ -3440,7 +3455,8 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                 message_id = change_message_id[-1]
 
                 username = await get_username(search_user_id)
-                username = username.replace("_", "&#95;")
+                if username:
+                    username = username.replace("_", "&#95;")
 
                 # Формирование сообщения с данными пользователя
                 result_message = f"<b>🧶Пользователь:</b> <code>{search_user_id}</code>\n" \
@@ -3512,7 +3528,8 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                 message_id = change_message_id[-1]
 
                 username = await get_username(search_user_id)
-                username = username.replace("_", "&#95;")
+                if username:
+                    username = username.replace("_", "&#95;")
 
                 # Формирование сообщения с данными пользователя
                 result_message = f"<b>🧶Пользователь:</b> <code>{search_user_id}</code>\n" \
@@ -3573,7 +3590,8 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         page_members = members[start_index:end_index] if start_index < len(members) else []
         for idx, user_id in enumerate(page_members, start=start_index + 1):
             username = await get_username(user_id)
-            username = username.replace("_", "&#95;")
+            if username:
+                username = username.replace("_", "&#95;")
             result_message += f"<b>{idx}.</b> @{username} <b>(</b><code>{user_id}</code><b>)</b>\n"
 
         # Кнопки перелистывания
@@ -3630,7 +3648,10 @@ async def perform_contest_draw(contest_id):
         for idx, winner in enumerate(random_winners, start=1):
             user_id = winner
             username = await get_username(user_id)
-            formatted_username = username.replace("_", "&#95;")
+            if username:
+                formatted_username = username.replace("_", "&#95;")
+            else:
+                formatted_username = "None"
 
             result_message += f"<b>{idx}.</b> @{formatted_username} <b>—</b> <code>{winner}</code>\n"
             share_message += f"**{idx}.** @{username} — `{user_id}`\n"
@@ -3657,7 +3678,10 @@ async def perform_contest_draw(contest_id):
         user_id = random_winners[0]
 
         username = await get_username(user_id)
-        formatted_username = username.replace("_", "&#95;")
+        if username:
+            formatted_username = username.replace("_", "&#95;")
+        else:
+            formatted_username = "None"
 
         result_message += f"@{formatted_username} <b>—</b> <code>{user_id}</code>"
         share_message = f"** - Конкурс бот 🎭**\n\n**🎖️ Победитель конкурса** `{contest_id}`:\n" \
