@@ -385,14 +385,13 @@ async def show_user_history(callback_query, user_id, current_page):
                                             callback_query.message.message_id, parse_mode="Markdown", reply_markup=keyboard)
         profile_messages.append(reply.message_id)
 
-async def promo_members(callback_query, promo, current_page):
+async def promo_members(chat_id, promo, current_page):
     # Поиск конкурса по айди
-    contest = await promo_collection.find_one({"_id": promo})
-    message_id = change_message_id[-1]
+    promo_code = await promo_collection.find_one({"_id": promo})
 
-    members = contest.get("members")
-    participants_word = format_participants(len(members))
-    result_message = f"<b>🏯 Всего</b> <code>{len(members)}</code> <b>{participants_word}</b> — <b>Страница {current_page}</b>\n\n"
+    members = promo_code.get("active_members")
+    result_message = f"<b>📋 Список пользователей для промокода</b> <code>{promo}</code>:\n\n" \
+                     f"                                   <b>Страница {current_page}</b>\n\n"
 
     keyboard = types.InlineKeyboardMarkup()
 
@@ -404,14 +403,12 @@ async def promo_members(callback_query, promo, current_page):
     for idx, user_id in enumerate(page_members, start=start_index + 1):
         username = await get_username(user_id)
         username = username.replace("_", "&#95;")
-        result_message += f"{idx}. @{username} (<code>{user_id}</code>)\n"
+        result_message += f"<b>{idx}.</b> @{username} <b>(</b><code>{user_id}</code><b>)</b>\n"
 
     # Кнопки перелистывания
-    prev_button = types.InlineKeyboardButton(text='◀️ Назад', callback_data=f'members_{contest_id}_prev_{current_page}')
-    next_button = types.InlineKeyboardButton(text='Вперед ▶️', callback_data=f'members_{contest_id}_next_{current_page}')
-    contest_profile = types.InlineKeyboardButton(text='Детальнее 🧶', callback_data=f'contest_search_profile_{contest_id}')
-    banned_members = types.InlineKeyboardButton(text='Заблок. участники ‼️', callback_data=f'ban_members_{contest_id}_None_1')
-    back = types.InlineKeyboardButton(text='Назад 🧿', callback_data='change')
+    prev_button = types.InlineKeyboardButton(text='◀️ Назад', callback_data=f'promo_{promo}_prev_{current_page}')
+    next_button = types.InlineKeyboardButton(text='Вперед ▶️', callback_data=f'promo_{promo}_next_{current_page}')
+    back = types.InlineKeyboardButton(text='Выполенено ✅', callback_data='done')
 
     # Add both buttons if there are both previous and next pages
     if current_page > 1 and end_index < len(members):
@@ -422,17 +419,16 @@ async def promo_members(callback_query, promo, current_page):
     # Add only the next button if this is the first page
     elif end_index < len(members):
         keyboard.row(next_button)
-
-    if len(members) >= 1:
-        keyboard.row(banned_members, contest_profile)
     keyboard.row(back)
-
-    reply = await bot.edit_message_text(result_message, callback_query.message.chat.id, message_id,
-                                        parse_mode="HTML",
-                                        reply_markup=keyboard)
+    uses = promo_code.get("uses")
+    result_message += f"\n\n<b>🧪 Осталось активаций:</b> <code>{uses}</code>"
+    # Send the formatted message with the keyboard
+    reply = await bot.send_message(chat_id, result_message,
+                                   parse_mode="HTML",
+                                   reply_markup=keyboard)
 
     # Сохранение ID сообщения в глобальную переменную
-    change_message_id.append(reply.message_id)
+    promo_message_id.append(reply.message_id)
 
 async def handle_promo_code(promo_code: str, user_id: int):
     promo = await promo_collection.find_one({"_id": promo_code})
@@ -567,6 +563,7 @@ generate_message = []
 contest_messages = []
 change_message_id = []
 permanent_message_id = []
+promo_message_id = []
 
 @dp.message_handler(commands=['start'])
 async def start_command(message: types.Message):
@@ -2591,6 +2588,7 @@ async def process_promo_list_command(message: types.Message):
     promo_id = message.get_args()
     user_data = await user_collections.find_one({"_id": message.from_user.id})
     status = user_data.get("status")
+    current_page = 1
     if status == "Создатель 🎭" or status == "Админ 🚗":
         if promo_id:
             promo = await promo_collection.find_one({"_id": promo_id})
@@ -2598,10 +2596,7 @@ async def process_promo_list_command(message: types.Message):
                 active_members = promo.get("active_members", [])
                 uses = promo.get("uses")
                 if active_members:
-                    members_list = "\n".join(f"*{index + 1}.* `{member}`" for index, member in enumerate(active_members))
-                    await message.reply(f"*📋 Список пользователей для промокода* `{promo_id}`:\n{members_list}\n\n"
-                                        f"*🧪 Осталось активаций:* `{uses}`",
-                                        parse_mode="Markdown")
+                    await promo_members(message.chat.id, promo_id, current_page)
                 else:
                     await message.reply(f"*📋 Промокод* `{promo_id}` *не был активирован ни одним пользователем.*",
                                         parse_mode="Markdown")
@@ -2659,6 +2654,8 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
     global contest_name, contest_id, contest_description, winners, end_date
     global profile_messages
     global change_message_id
+    global promo_message_id
+
     # Получение данных о нажатой кнопке
     button_text = callback_query.data
     user_id = callback_query.from_user.id
@@ -3545,6 +3542,60 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                                                parse_mode="Markdown")
             await asyncio.sleep(4)
             await bot.delete_message(chat_id=callback_query.message.chat.id, message_id=int_digit.message_id)
+
+    elif button_text.startswith('promo'):
+
+        parts = button_text.split('_')
+        promo = str(parts[1])
+        action = parts[2]
+        current_page = int(parts[3])
+        message_id = promo_message_id[-1]
+
+        if action == 'prev':
+            current_page -= 1
+
+        elif action == 'next':
+            current_page += 1
+
+        # Поиск конкурса по айди
+        promo_code = await promo_collection.find_one({"_id": promo})
+
+        members = promo_code.get("active_members")
+        result_message = f"<b>📋 Список пользователей для промокода</b> <code>{promo}</code>:\n\n" \
+                         f"                                   <b>Страница {current_page}</b>\n\n"
+
+        keyboard = types.InlineKeyboardMarkup()
+
+        # Количество участников на одной странице
+        per_page = 25
+        start_index = (current_page - 1) * per_page
+        end_index = current_page * per_page
+        page_members = members[start_index:end_index] if start_index < len(members) else []
+        for idx, user_id in enumerate(page_members, start=start_index + 1):
+            username = await get_username(user_id)
+            username = username.replace("_", "&#95;")
+            result_message += f"<b>{idx}.</b> @{username} <b>(</b><code>{user_id}</code><b>)</b>\n"
+
+        # Кнопки перелистывания
+        prev_button = types.InlineKeyboardButton(text='◀️ Назад', callback_data=f'promo_{promo}_prev_{current_page}')
+        next_button = types.InlineKeyboardButton(text='Вперед ▶️', callback_data=f'promo_{promo}_next_{current_page}')
+        back = types.InlineKeyboardButton(text='Выполенено ✅', callback_data='done')
+
+        # Add both buttons if there are both previous and next pages
+        if current_page > 1 and end_index < len(members):
+            keyboard.row(prev_button, next_button)
+        # Add only the previous button if there are no more pages
+        elif current_page > 1:
+            keyboard.row(prev_button)
+        # Add only the next button if this is the first page
+        elif end_index < len(members):
+            keyboard.row(next_button)
+        keyboard.row(back)
+        uses = promo_code.get("uses")
+        result_message += f"\n\n<b>🧪 Осталось активаций:</b> <code>{uses}</code>"
+
+        await bot.edit_message_text(result_message, callback_query.message.chat.id, message_id, parse_mode="HTML",
+                                    reply_markup=keyboard)
 
     elif button_text == 'done':
 
