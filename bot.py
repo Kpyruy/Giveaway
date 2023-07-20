@@ -1324,6 +1324,11 @@ async def process_search(message: types.Message, state: FSMContext):
         members_message = len(members)
         winners = contest.get("winners", 0)
         contest_winners = contest.get("contest_winners")
+        ended = contest.get("ended")
+        if ended == "True":
+            contest_status = "❌ Статус: Завершён."
+        else:
+            contest_status = "✅ Статус: Активен."
 
         if contest_winners:
 
@@ -1338,7 +1343,8 @@ async def process_search(message: types.Message, state: FSMContext):
                              f"<b>🎖️ Количество победителей:</b> <code>{winners}</code>\n" \
                              f"<b>👤 Количество участников:</b> <code>{members_message}</code>\n" \
                              f"<b>🏆 Победители:</b> \n{contest_winners_list}\n" \
-                             f"<b>📆 Дата окончания:</b> <code>{end_date}</code>"
+                             f"<b>📆 Дата окончания:</b> <code>{end_date}</code>\n\n" \
+                             f"{contest_status}"
         else:
             result_message = f"<b>🔎 Результаты поиска конкурса </b> <code>{contest_id}</code><b>:</b>\n\n" \
                              f"<b>🍙 Автор:</b> <code>{owner_id}</code>\n" \
@@ -1347,10 +1353,14 @@ async def process_search(message: types.Message, state: FSMContext):
                              f"<b>🎗️ Описание:</b> <i>{contest_description}</i>\n" \
                              f"<b>🎖️ Количество победителей:</b> <code>{winners}</code>\n" \
                              f"<b>👤 Количество участников:</b> <code>{members_message}</code>\n" \
-                             f"<b>📆 Дата окончания:</b> <code>{end_date}</code>"
+                             f"<b>📆 Дата окончания:</b> <code>{end_date}</code>\n\n" \
+                             f"{contest_status}"
+        keyboard = types.InlineKeyboardMarkup()
+        back = types.InlineKeyboardButton(text='Назад 🧿', callback_data='decline_search')
+        search = types.InlineKeyboardButton(text='Проверить 🔎', callback_data='decline_search')
 
-        reply = await bot.edit_message_text(result_message, message.chat.id, message_id, parse_mode="HTML",
-                                    reply_markup=keyboard)
+        keyboard.row(back)
+        reply = await bot.edit_message_text(result_message, message.chat.id, message_id, parse_mode="HTML", reply_markup=keyboard)
         await state.finish()
 
         # Сохранение ID сообщения в глобальную переменную
