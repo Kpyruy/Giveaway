@@ -2980,6 +2980,8 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             current_page -= 1
         elif action == 'next':
             current_page += 1
+        else:
+            current_page = 1
 
         await show_user_history(callback_query, user_id, current_page)
 
