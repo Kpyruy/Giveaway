@@ -1358,8 +1358,9 @@ async def process_search(message: types.Message, state: FSMContext):
         keyboard = types.InlineKeyboardMarkup()
         back = types.InlineKeyboardButton(text='Назад 🧿', callback_data='decline_search')
         search = types.InlineKeyboardButton(text='Проверить 🔎', callback_data='decline_search')
-
         keyboard.row(back)
+        keyboard.row(search)
+
         reply = await bot.edit_message_text(result_message, message.chat.id, message_id, parse_mode="HTML", reply_markup=keyboard)
         await state.finish()
 
