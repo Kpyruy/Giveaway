@@ -36,7 +36,6 @@ config = ConfigParser()
 config.read('private/.env')
 
 BOT_TOKEN = config.get('BOT', 'TOKEN')
-PAYMENTS_TOKEN = config.get('PAYMENTS', 'PAYMENTS_TOKEN')
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
