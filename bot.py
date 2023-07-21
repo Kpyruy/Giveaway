@@ -8,6 +8,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types.message import ContentType
 from aiogram.dispatcher.filters import Command
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.utils import executor
@@ -15,6 +16,16 @@ from configparser import ConfigParser
 from pymongo import MongoClient
 import motor.motor_asyncio
 import json
+
+import logging
+import asyncio
+import logging
+from aiogram import Bot, Dispatcher, types
+from aiogram.contrib.middlewares.logging import LoggingMiddleware
+from aiogram.types import ParseMode
+from aiogram.utils import executor
+
+from aiogram.dispatcher.handler import CancelHandler, current_handler
 
 cluster = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://Admin:T8Lylcpso9jNs5Yw@cluster0.1t9opzs.mongodb.net/RandomBot?retryWrites=true&w=majority")
 user_collections = cluster.RandomBot.user
@@ -30,6 +41,7 @@ config = ConfigParser()
 config.read('private/.env')
 
 BOT_TOKEN = config.get('BOT', 'TOKEN')
+PAYMENTS_TOKEN = config.get('PAYMENTS', 'PAYMENTS_TOKEN')
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
@@ -137,7 +149,8 @@ async def create_contest(contest_id, user_id, contest_name, contest_description,
         "ban_members": [],
         "join_date": [],
         "start_link": start_link,
-        "ended": "False"
+        "ended": "False",
+        "winners_enough_message_sent": "False"
     })
 
 async def update_contest_members(contest_id, user_id):
@@ -187,6 +200,16 @@ async def add_key(key, uses):
     key_data = {
         "key": key,
         "uses": uses,
+    }
+    await key_collection.insert_one(key_data)
+
+async def buy_key(key, uses, email, user_id):
+    key_data = {
+        "key": key,
+        "uses": int(uses),
+        "email": email,
+        "user_id": int(user_id),
+        "buy": "True"
     }
     await key_collection.insert_one(key_data)
 
@@ -759,7 +782,12 @@ async def generate_command(message: types.Message):
 
             await MenuCategories.uses.set()
     else:
-        await message.reply("*У вас нет доступа для генерации ключей. 🚫*", parse_mode="Markdown")
+        # Код для существующего пользователя
+        keyboard = types.InlineKeyboardMarkup()
+        buy_key = types.InlineKeyboardButton(text='Купить ключ 🔑', callback_data='buy_key')
+        keyboard.row(buy_key)
+
+        await message.reply("*У вас нет доступа для генерации ключей. 🚫*", parse_mode="Markdown", reply_markup=keyboard)
 
 @dp.message_handler(state=MenuCategories.uses)
 async def process_uses(message: types.Message, state: FSMContext):
@@ -2625,7 +2653,7 @@ async def start_contest_command(message: types.Message):
               f'/start - 🎭 Основное меню, помогает посмотреть свой профиль и активные конкурсы на данный момент, также использовать кнопку `Поддержка 🆘`.\n' \
               f'/search - 🔎 Поиск конкурса/пользователя, используя его айди.\n' \
               f'/profile - 👤 Чат-команда для показа своего профиля.\n' \
-              f'/promo - 🧪 Просмтор активных промокодов, также их активация!\n' \
+              f'/promo - 🧪 Просмотр активных промокодов, также их активация!\n' \
               f'/contest - 🎖 Меню для создания ваших конкурсов и управлениями ими, доступ к меню получается только через `ключ 🔑`.\n' \
               f'/generate - 🗝️ Создание/покупка (в будущем) ключа для формирования конкурсов!\n\n'
 
@@ -3655,6 +3683,13 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         await bot.edit_message_text(result_message, callback_query.message.chat.id, message_id, parse_mode="HTML",
                                     reply_markup=keyboard)
 
+    elif button_text == 'buy_key':
+        result_message = "*💲 Цена ключа на одну активацию* `1$`\n" \
+                         "*🔑 Воспользуйтесь командой* /buy_key *для покупки ключа.*"
+        await bot.edit_message_text(result_message, callback_query.message.chat.id, callback_query.message.message_id, parse_mode="Markdown",
+                                    reply_markup=keyboard)
+
+
     elif button_text == 'done':
 
         await bot.answer_callback_query(callback_query.id, text="Задача была выполнена успешно! ✔️")
@@ -3662,7 +3697,6 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         await bot.delete_message(callback_query.message.chat.id,
                                  callback_query.message.message_id)  # Удаление сообщения
 
-# Функция, выполняющая розыгрыш
 async def perform_contest_draw(contest_id):
     # Получение данных о конкурсе
     contest = await contests_collection.find_one({"_id": int(contest_id)})
@@ -3670,11 +3704,21 @@ async def perform_contest_draw(contest_id):
     members = contest.get("members")
     owner_id = contest.get("owner_id")
 
+    # Update the flag to True since the message has been sent
+    await contests_collection.update_one({"_id": int(contest_id)},
+                                         {"$set": {"winners_enough_message_sent": True}})
+
     if len(members) < winners:
-        await bot.send_message("*❌ Участников меньше, чем заданное число победителей.*\n\n"
-                                    f"🥇 Число победителей: {winners}"
-                                    f"👤 Текущее количество участников {len(members)}",
-                                    owner_id, parse_mode="Markdown")
+        # Check if the message has not been sent before
+        if contest.get("winners_enough_message_sent") == True:
+            winners_enough_message = "*❌ Участников меньше, чем заданное число победителей.*\n\n" \
+                                     f"*🥇 Число победителей:* `{winners}`\n" \
+                                     f"*👤 Текущее количество участников:* `{len(members)}`"
+            await bot.send_message(owner_id, winners_enough_message, parse_mode="Markdown")
+        else:
+            pass
+            # Set a flag to False indicating the message has not been sent
+        await contests_collection.update_one({"_id": int(contest_id)}, {"$set": {"winners_enough_message_sent": False}})
         return
 
     # Случайный выбор победителей
@@ -3780,6 +3824,62 @@ async def check_and_perform_contest_draw():
                             await perform_contest_draw(contest_id)
                     except ValueError:
                         pass
+
+# log
+logging.basicConfig(level=logging.INFO)
+
+# Команда для покупки ключа
+@dp.message_handler(commands=['buy_key'])
+async def buy_key(message: types.Message):
+    # Генерация ключа, определение его цены и описания
+    key = generate_key()
+    price = 1  # Укажите здесь цену ключа
+    description = f"🔑 Оплата ключа."
+
+    # Отправляем запрос на оплату
+    await bot.send_invoice(
+        chat_id=message.chat.id,
+        title="Оформление заказа 🔰",
+        description=description,
+        payload=key,  # Отправляем ключ в payload, чтобы потом узнать, какой ключ оплатили
+        provider_token=PAYMENTS_TOKEN,
+        currency='USD',  # Валюта (в данном случае российский рубль)
+        prices=[
+            types.LabeledPrice(label='Ключ доступа', amount=price * 100)  # Цена указывается в копейках
+        ],
+        start_parameter='buy_key',  # Уникальный параметр для оплаты
+        need_name=True,
+        need_phone_number=False,
+        need_email=True,
+        need_shipping_address=False,  # Зависит от того, требуется ли доставка товара
+    )
+
+# Обработчик успешной оплаты
+@dp.message_handler(content_types=types.ContentType.SUCCESSFUL_PAYMENT)
+async def process_successful_payment(message: types.Message):
+    # Получаем ключ и прочие данные
+    key = message.successful_payment.invoice_payload
+    uses = 1
+    user_id = message.from_user.id
+
+    # Получаем email пользователя, если он был введен
+    if message.successful_payment.order_info and 'email' in message.successful_payment.order_info:
+        email = message.successful_payment.order_info['email']
+    else:
+        email = "Email не был указан."
+
+    # Вызываем функцию buy_key с необходимыми аргументами
+    await buy_key(key, uses, email, user_id)
+
+    # Выполняем какие-либо действия с ключом и email
+    await message.answer(f"*✅ Покупка была успешна! Вы получили ключ* `{key}`.\n"
+                         f"*🔑 Количество активаций:* {uses}")
+
+# Обработчик предварительной проверки
+@dp.pre_checkout_query_handler(lambda query: True)
+async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
+    # Отправляем ответ о успешной предварительной проверке
+    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 async def main():
     # Запуск бота
