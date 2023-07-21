@@ -775,10 +775,10 @@ async def generate_command(message: types.Message):
 
             await MenuCategories.uses.set()
     else:
-        # Код для существующего пользователя
-        keyboard = types.InlineKeyboardMarkup()
-        buy_key = types.InlineKeyboardButton(text='Купить ключ 🔑', callback_data='buy_key')
-        keyboard.row(buy_key)
+        # # Код для существующего пользователя
+        # keyboard = types.InlineKeyboardMarkup()
+        # buy_key = types.InlineKeyboardButton(text='Купить ключ 🔑', callback_data='buy_key')
+        # keyboard.row(buy_key)
 
         await message.reply("*У вас нет доступа для генерации ключей. 🚫*", parse_mode="Markdown", reply_markup=keyboard)
 
@@ -1167,17 +1167,17 @@ async def process_description(message: types.Message, state: FSMContext):
 
     # Получаем текущую дату и время
     today = datetime.now(timezone)
-
+    print(today)
     try:
         # Проверяем, содержит ли сообщение время (часы и минуты) или только дату
         if ':' in end_date:
             # Преобразуем введенную дату и время в формате ДД.ММ.ГГГГ ЧАС:МИНУТЫ
-            end_date = datetime.strptime(message.text, "%d.%m.%Y %H:%M").astimezone(timezone)
+            end_date = datetime.strptime(message.text, "%d.%m.%Y %H:%M")
         else:
             # Преобразуем введенную дату в формате ДД.ММ.ГГГГ
             end_date = datetime.strptime(message.text, "%d.%m.%Y")
             # Установка времени на 00:00, если время не указано
-            end_date = end_date.replace(hour=0, minute=0).astimezone(timezone)
+            end_date = end_date.replace(hour=0, minute=0)
 
         # Проверяем, что введенная дата и время больше текущей даты и времени
         if end_date <= today:
@@ -1263,10 +1263,10 @@ async def confirm_create_callback(callback_query: types.CallbackQuery, state: FS
 @dp.callback_query_handler(text='decline_search', state=MenuCategories.search)
 async def decline_search_callback(callback_query: types.CallbackQuery, state: FSMContext):
     await callback_query.answer()
-    await state.finish()
     prev_message_id = (await state.get_data()).get('prev_message_id')
     if prev_message_id:
         await bot.delete_message(callback_query.message.chat.id, prev_message_id)
+    await state.finish()
 
     global contest_messages
 
@@ -1342,9 +1342,9 @@ async def process_search(message: types.Message, state: FSMContext):
         contest_winners = contest.get("contest_winners")
         ended = contest.get("ended")
         if ended == "True":
-            contest_status = "❌ Статус: Завершён."
+            contest_status = "<b>❌ Статус:</b> Завершён."
         else:
-            contest_status = "✅ Статус: Активен."
+            contest_status = "<b>✅ Статус:</b> Активен."
 
         if contest_winners:
 
@@ -1371,11 +1371,12 @@ async def process_search(message: types.Message, state: FSMContext):
                              f"<b>👤 Количество участников:</b> <code>{members_message}</code>\n" \
                              f"<b>📆 Дата окончания:</b> <code>{end_date}</code>\n\n" \
                              f"{contest_status}"
+
         keyboard = types.InlineKeyboardMarkup()
-        back = types.InlineKeyboardButton(text='Назад 🧿', callback_data='decline_search')
-        search = types.InlineKeyboardButton(text='Проверить 🔎', callback_data='decline_search')
-        keyboard.row(back)
+        input_id = types.InlineKeyboardButton(text='НАЗАД ❌', callback_data='decline_search')
+        search = types.InlineKeyboardButton(text='Проверить 🔎', callback_data='search')
         keyboard.row(search)
+        keyboard.row(input_id)
 
         reply = await bot.edit_message_text(result_message, message.chat.id, message_id, parse_mode="HTML", reply_markup=keyboard)
         await state.finish()
@@ -3074,7 +3075,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                                       f"*🪁 Имя:* `{contest_name}`\n" \
                                       f"*🧊 Айди конкурса* `{contest_id}`*:*\n" \
                                       f"*🏯 Количество участников:* `{members_message}`\n\n"
-                    keyboard = types.InlineKeyboardMarkup()
+        keyboard = types.InlineKeyboardMarkup()
 
         decline_create = types.InlineKeyboardButton(text='Назад 🧿', callback_data='decline_create')
         contest_check = types.InlineKeyboardButton(text='Управление 🧧', callback_data='contest_check')
@@ -3812,58 +3813,58 @@ async def check_and_perform_contest_draw():
 # log
 logging.basicConfig(level=logging.INFO)
 
-# Команда для покупки ключа
-@dp.message_handler(commands=['buy_key'])
-async def buy_key(message: types.Message):
-    # Генерация ключа, определение его цены и описания
-    key = generate_key()
-    price = 1  # Укажите здесь цену ключа
-    description = f"🔑 Оплата ключа."
-
-    # Отправляем запрос на оплату
-    await bot.send_invoice(
-        chat_id=message.chat.id,
-        title="Оформление заказа 🔰",
-        description=description,
-        payload=key,  # Отправляем ключ в payload, чтобы потом узнать, какой ключ оплатили
-        provider_token=PAYMENTS_TOKEN,
-        currency='USD',  # Валюта (в данном случае российский рубль)
-        prices=[
-            types.LabeledPrice(label='Ключ доступа', amount=price * 100)  # Цена указывается в копейках
-        ],
-        start_parameter='buy_key',  # Уникальный параметр для оплаты
-        need_name=True,
-        need_phone_number=False,
-        need_email=True,
-        need_shipping_address=False,  # Зависит от того, требуется ли доставка товара
-    )
-
-# Обработчик успешной оплаты
-@dp.message_handler(content_types=types.ContentType.SUCCESSFUL_PAYMENT)
-async def process_successful_payment(message: types.Message):
-    # Получаем ключ и прочие данные
-    key = message.successful_payment.invoice_payload
-    uses = 1
-    user_id = message.from_user.id
-
-    # Получаем email пользователя, если он был введен
-    if message.successful_payment.order_info and 'email' in message.successful_payment.order_info:
-        email = message.successful_payment.order_info['email']
-    else:
-        email = "Email не был указан."
-
-    # Вызываем функцию buy_key с необходимыми аргументами
-    await buy_key(key, uses, email, user_id)
-
-    # Выполняем какие-либо действия с ключом и email
-    await message.answer(f"*✅ Покупка была успешна! Вы получили ключ* `{key}`.\n"
-                         f"*🔑 Количество активаций:* {uses}")
-
-# Обработчик предварительной проверки
-@dp.pre_checkout_query_handler(lambda query: True)
-async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
-    # Отправляем ответ о успешной предварительной проверке
-    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+# # Команда для покупки ключа
+# @dp.message_handler(commands=['buy_key'])
+# async def buy_key(message: types.Message):
+#     # Генерация ключа, определение его цены и описания
+#     key = generate_key()
+#     price = 1  # Укажите здесь цену ключа
+#     description = f"🔑 Оплата ключа."
+#
+#     # Отправляем запрос на оплату
+#     await bot.send_invoice(
+#         chat_id=message.chat.id,
+#         title="Оформление заказа 🔰",
+#         description=description,
+#         payload=key,  # Отправляем ключ в payload, чтобы потом узнать, какой ключ оплатили
+#         provider_token=PAYMENTS_TOKEN,
+#         currency='USD',  # Валюта (в данном случае российский рубль)
+#         prices=[
+#             types.LabeledPrice(label='Ключ доступа', amount=price * 100)  # Цена указывается в копейках
+#         ],
+#         start_parameter='buy_key',  # Уникальный параметр для оплаты
+#         need_name=True,
+#         need_phone_number=False,
+#         need_email=True,
+#         need_shipping_address=False,  # Зависит от того, требуется ли доставка товара
+#     )
+#
+# # Обработчик успешной оплаты
+# @dp.message_handler(content_types=types.ContentType.SUCCESSFUL_PAYMENT)
+# async def process_successful_payment(message: types.Message):
+#     # Получаем ключ и прочие данные
+#     key = message.successful_payment.invoice_payload
+#     uses = 1
+#     user_id = message.from_user.id
+#
+#     # Получаем email пользователя, если он был введен
+#     if message.successful_payment.order_info and 'email' in message.successful_payment.order_info:
+#         email = message.successful_payment.order_info['email']
+#     else:
+#         email = "Email не был указан."
+#
+#     # Вызываем функцию buy_key с необходимыми аргументами
+#     await buy_key(key, uses, email, user_id)
+#
+#     # Выполняем какие-либо действия с ключом и email
+#     await message.answer(f"*✅ Покупка была успешна! Вы получили ключ* `{key}`.\n"
+#                          f"*🔑 Количество активаций:* {uses}")
+#
+# # Обработчик предварительной проверки
+# @dp.pre_checkout_query_handler(lambda query: True)
+# async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
+#     # Отправляем ответ о успешной предварительной проверке
+#     await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 async def main():
     # Запуск бота
