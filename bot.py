@@ -1166,18 +1166,18 @@ async def process_description(message: types.Message, state: FSMContext):
     message_id = contest_messages[-1]
 
     # Получаем текущую дату и время
-    today = datetime.now()
+    today = datetime.now(timezone)
 
     try:
         # Проверяем, содержит ли сообщение время (часы и минуты) или только дату
         if ':' in end_date:
             # Преобразуем введенную дату и время в формате ДД.ММ.ГГГГ ЧАС:МИНУТЫ
-            end_date = datetime.strptime(message.text, "%d.%m.%Y %H:%M")
+            end_date = datetime.strptime(message.text, "%d.%m.%Y %H:%M").astimezone(timezone)
         else:
             # Преобразуем введенную дату в формате ДД.ММ.ГГГГ
             end_date = datetime.strptime(message.text, "%d.%m.%Y")
             # Установка времени на 00:00, если время не указано
-            end_date = end_date.replace(hour=0, minute=0)
+            end_date = end_date.replace(hour=0, minute=0).astimezone(timezone)
 
         # Проверяем, что введенная дата и время больше текущей даты и времени
         if end_date <= today:
@@ -3783,6 +3783,7 @@ timezone = pytz.timezone('Europe/Kiev')
 
 async def check_and_perform_contest_draw():
     while True:
+        # Convert the current time to your specified timezone
         current_time = datetime.now(timezone)
 
         # Получение всех конкурсов
@@ -3792,6 +3793,7 @@ async def check_and_perform_contest_draw():
             ended = contest.get("ended")
             contest_id = contest.get("_id")
             end_date_str = contest.get("end_date")
+
             if ended == "Дата не указана. 🚫":
                 pass
             else:
