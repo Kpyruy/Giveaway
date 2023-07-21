@@ -1215,7 +1215,7 @@ async def process_description(message: types.Message, state: FSMContext):
     decline_create = types.InlineKeyboardButton(text='Отменить ❌', callback_data='decline_create')
     keyboard.add(decline_create, confirm_create)
 
-    await bot.edit_message_text(confirmation_text, message.chat.id, message_id, parse_mode="Markdown", reply_markup=keyboard)
+    await bot.edit_message_text(confirmation_text, message.chat.id, message_id, parse_mode="None", reply_markup=keyboard)
 
     # Сброс состояния ожидания ввода ключа
     await state.finish()
@@ -3075,13 +3075,14 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                                       f"*🪁 Имя:* `{contest_name}`\n" \
                                       f"*🧊 Айди конкурса* `{contest_id}`*:*\n" \
                                       f"*🏯 Количество участников:* `{members_message}`\n\n"
+        result_message = "У вас нет активных конкурсов"
         keyboard = types.InlineKeyboardMarkup()
-
         decline_create = types.InlineKeyboardButton(text='Назад 🧿', callback_data='decline_create')
         contest_check = types.InlineKeyboardButton(text='Управление 🧧', callback_data='contest_check')
 
         keyboard.row(contest_check)
         keyboard.row(decline_create)
+
         reply = await bot.edit_message_text(result_message, callback_query.message.chat.id, message_id,
                                             parse_mode="Markdown",
                                             reply_markup=keyboard)
