@@ -7,7 +7,7 @@ import pytz
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 from aiogram.types.message import ContentType
 from aiogram.dispatcher.filters import Command
 from aiogram.dispatcher.filters.state import State, StatesGroup
@@ -18,9 +18,8 @@ import motor.motor_asyncio
 import json
 
 import logging
-import asyncio
-import logging
-
+from aiogram.contrib.middlewares.logging import LoggingMiddleware
+from aiogram.dispatcher.handler import CancelHandler, current_handler
 
 cluster = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://Admin:T8Lylcpso9jNs5Yw@cluster0.1t9opzs.mongodb.net/RandomBot?retryWrites=true&w=majority")
 user_collections = cluster.RandomBot.user
@@ -36,6 +35,7 @@ config = ConfigParser()
 config.read('private/.env')
 
 BOT_TOKEN = config.get('BOT', 'TOKEN')
+PAYMENTS_TOKEN = config.get('PAYMENTS', 'PAYMENTS_TOKEN')
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
@@ -1129,13 +1129,12 @@ async def process_description(message: types.Message, state: FSMContext):
         winners = 1
 
     await state.update_data(winners=winners)
+    message_id = contest_messages[-1]
 
     date_text = f"*📆 Введите дату окончания конкурса (в формате ДД.ММ.ГГГГ):*"
     keyboard = types.InlineKeyboardMarkup()
     skip_date = types.InlineKeyboardButton(text=' Пропустить 🚩', callback_data='skip_date')
     keyboard.add(skip_date)
-
-    message_id = contest_messages[-1]
 
     await bot.edit_message_text(date_text, message.chat.id, message_id, parse_mode="Markdown", reply_markup=keyboard)
 
@@ -1146,13 +1145,12 @@ async def skip_name_callback(query: types.CallbackQuery, state: FSMContext):
     winners = 1
 
     await state.update_data(winners=winners)
+    message_id = contest_messages[-1]
 
     date_text = f"*📆 Введите дату окончания конкурса (в формате ДД.ММ.ГГГГ):*"
     keyboard = types.InlineKeyboardMarkup()
     skip_date = types.InlineKeyboardButton(text=' Пропустить 🚩', callback_data='skip_date')
     keyboard.add(skip_date)
-
-    message_id = contest_messages[-1]
 
     await bot.edit_message_text(date_text, query.message.chat.id, message_id, parse_mode="Markdown", reply_markup=keyboard)
 
@@ -1165,6 +1163,7 @@ async def process_description(message: types.Message, state: FSMContext):
     end_date = message.text
 
     await bot.delete_message(message.chat.id, message.message_id)
+    message_id = contest_messages[-1]
 
     # Получаем текущую дату и время
     today = datetime.now()
@@ -1214,10 +1213,7 @@ async def process_description(message: types.Message, state: FSMContext):
     keyboard = types.InlineKeyboardMarkup()
     confirm_create = types.InlineKeyboardButton(text='Подтвердить ✅', callback_data='confirm_create')
     decline_create = types.InlineKeyboardButton(text='Отменить ❌', callback_data='decline_create')
-
     keyboard.add(decline_create, confirm_create)
-
-    message_id = contest_messages[-1]
 
     await bot.edit_message_text(confirmation_text, message.chat.id, message_id, parse_mode="Markdown", reply_markup=keyboard)
 
@@ -1233,6 +1229,7 @@ async def skip_date_callback(query: types.CallbackQuery, state: FSMContext):
     await state.update_data(end_date=end_date)
 
     data = await state.get_data()
+    message_id = contest_messages[-1]
 
     contest_name = data.get('contest_name')
     contest_id = data.get('contest_id')
@@ -1252,8 +1249,6 @@ async def skip_date_callback(query: types.CallbackQuery, state: FSMContext):
     decline_create = types.InlineKeyboardButton(text='Отменить ❌', callback_data='decline_create')
 
     keyboard.add(decline_create, confirm_create)
-
-    message_id = contest_messages[-1]
 
     await bot.edit_message_text(confirmation_text, query.message.chat.id, message_id, parse_mode="Markdown", reply_markup=keyboard)
 
@@ -3815,7 +3810,58 @@ async def check_and_perform_contest_draw():
 # log
 logging.basicConfig(level=logging.INFO)
 
+# Команда для покупки ключа
+@dp.message_handler(commands=['buy_key'])
+async def buy_key(message: types.Message):
+    # Генерация ключа, определение его цены и описания
+    key = generate_key()
+    price = 1  # Укажите здесь цену ключа
+    description = f"🔑 Оплата ключа."
 
+    # Отправляем запрос на оплату
+    await bot.send_invoice(
+        chat_id=message.chat.id,
+        title="Оформление заказа 🔰",
+        description=description,
+        payload=key,  # Отправляем ключ в payload, чтобы потом узнать, какой ключ оплатили
+        provider_token=PAYMENTS_TOKEN,
+        currency='USD',  # Валюта (в данном случае российский рубль)
+        prices=[
+            types.LabeledPrice(label='Ключ доступа', amount=price * 100)  # Цена указывается в копейках
+        ],
+        start_parameter='buy_key',  # Уникальный параметр для оплаты
+        need_name=True,
+        need_phone_number=False,
+        need_email=True,
+        need_shipping_address=False,  # Зависит от того, требуется ли доставка товара
+    )
+
+# Обработчик успешной оплаты
+@dp.message_handler(content_types=types.ContentType.SUCCESSFUL_PAYMENT)
+async def process_successful_payment(message: types.Message):
+    # Получаем ключ и прочие данные
+    key = message.successful_payment.invoice_payload
+    uses = 1
+    user_id = message.from_user.id
+
+    # Получаем email пользователя, если он был введен
+    if message.successful_payment.order_info and 'email' in message.successful_payment.order_info:
+        email = message.successful_payment.order_info['email']
+    else:
+        email = "Email не был указан."
+
+    # Вызываем функцию buy_key с необходимыми аргументами
+    await buy_key(key, uses, email, user_id)
+
+    # Выполняем какие-либо действия с ключом и email
+    await message.answer(f"*✅ Покупка была успешна! Вы получили ключ* `{key}`.\n"
+                         f"*🔑 Количество активаций:* {uses}")
+
+# Обработчик предварительной проверки
+@dp.pre_checkout_query_handler(lambda query: True)
+async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
+    # Отправляем ответ о успешной предварительной проверке
+    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 async def main():
     # Запуск бота
