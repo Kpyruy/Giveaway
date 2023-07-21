@@ -143,8 +143,7 @@ async def create_contest(contest_id, user_id, contest_name, contest_description,
         "ban_members": [],
         "join_date": [],
         "start_link": start_link,
-        "ended": "False",
-        "winners_enough_message_sent": "False"
+        "ended": "False"
     })
 
 async def update_contest_members(contest_id, user_id):
@@ -3698,22 +3697,16 @@ async def perform_contest_draw(contest_id):
     members = contest.get("members")
     owner_id = contest.get("owner_id")
 
-    # Update the flag to True since the message has been sent
-    await contests_collection.update_one({"_id": int(contest_id)},
-                                         {"$set": {"winners_enough_message_sent": True}})
-
     if len(members) < winners:
-        # Check if the message has not been sent before
-        if contest.get("winners_enough_message_sent") == True:
-            winners_enough_message = "*❌ Участников меньше, чем заданное число победителей.*\n\n" \
+        winners_enough_message = "*❌ Участников меньше, чем заданное число победителей, дата конкурса была изменена.*\n\n" \
+                                 f"*🧊 Айди конкурса:* `{contest_id}`\n" \
                                      f"*🥇 Число победителей:* `{winners}`\n" \
                                      f"*👤 Текущее количество участников:* `{len(members)}`"
-            await bot.send_message(owner_id, winners_enough_message, parse_mode="Markdown")
-        else:
-            pass
-            # Set a flag to False indicating the message has not been sent
-        await contests_collection.update_one({"_id": int(contest_id)}, {"$set": {"winners_enough_message_sent": False}})
-        return
+        await bot.send_message(owner_id, winners_enough_message, parse_mode="Markdown")
+        # Update the flag to True since the message has been sent
+        await contests_collection.update_one({"_id": int(contest_id)},
+                                             {"$set": {"end_date": "Дата не указана. 🚫"}})
+    return
 
     # Случайный выбор победителей
     random_winners = random.sample(members, winners)
@@ -3821,6 +3814,8 @@ async def check_and_perform_contest_draw():
 
 # log
 logging.basicConfig(level=logging.INFO)
+
+
 
 async def main():
     # Запуск бота
