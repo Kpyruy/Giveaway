@@ -20,12 +20,7 @@ import json
 import logging
 import asyncio
 import logging
-from aiogram import Bot, Dispatcher, types
-from aiogram.contrib.middlewares.logging import LoggingMiddleware
-from aiogram.types import ParseMode
-from aiogram.utils import executor
 
-from aiogram.dispatcher.handler import CancelHandler, current_handler
 
 cluster = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://Admin:T8Lylcpso9jNs5Yw@cluster0.1t9opzs.mongodb.net/RandomBot?retryWrites=true&w=majority")
 user_collections = cluster.RandomBot.user
@@ -3827,59 +3822,6 @@ async def check_and_perform_contest_draw():
 
 # log
 logging.basicConfig(level=logging.INFO)
-
-# Команда для покупки ключа
-@dp.message_handler(commands=['buy_key'])
-async def buy_key(message: types.Message):
-    # Генерация ключа, определение его цены и описания
-    key = generate_key()
-    price = 1  # Укажите здесь цену ключа
-    description = f"🔑 Оплата ключа."
-
-    # Отправляем запрос на оплату
-    await bot.send_invoice(
-        chat_id=message.chat.id,
-        title="Оформление заказа 🔰",
-        description=description,
-        payload=key,  # Отправляем ключ в payload, чтобы потом узнать, какой ключ оплатили
-        provider_token=PAYMENTS_TOKEN,
-        currency='USD',  # Валюта (в данном случае российский рубль)
-        prices=[
-            types.LabeledPrice(label='Ключ доступа', amount=price * 100)  # Цена указывается в копейках
-        ],
-        start_parameter='buy_key',  # Уникальный параметр для оплаты
-        need_name=True,
-        need_phone_number=False,
-        need_email=True,
-        need_shipping_address=False,  # Зависит от того, требуется ли доставка товара
-    )
-
-# Обработчик успешной оплаты
-@dp.message_handler(content_types=types.ContentType.SUCCESSFUL_PAYMENT)
-async def process_successful_payment(message: types.Message):
-    # Получаем ключ и прочие данные
-    key = message.successful_payment.invoice_payload
-    uses = 1
-    user_id = message.from_user.id
-
-    # Получаем email пользователя, если он был введен
-    if message.successful_payment.order_info and 'email' in message.successful_payment.order_info:
-        email = message.successful_payment.order_info['email']
-    else:
-        email = "Email не был указан."
-
-    # Вызываем функцию buy_key с необходимыми аргументами
-    await buy_key(key, uses, email, user_id)
-
-    # Выполняем какие-либо действия с ключом и email
-    await message.answer(f"*✅ Покупка была успешна! Вы получили ключ* `{key}`.\n"
-                         f"*🔑 Количество активаций:* {uses}")
-
-# Обработчик предварительной проверки
-@dp.pre_checkout_query_handler(lambda query: True)
-async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
-    # Отправляем ответ о успешной предварительной проверке
-    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 async def main():
     # Запуск бота
