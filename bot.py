@@ -85,12 +85,15 @@ async def add_user(user_id):
 
 async def update_status(user_id):
     user_data = await user_collections.find_one({"_id": user_id})
+    # logging.info(f"User Data for user {user_id}: {user_data}")
+
     status = user_data.get("status")
+    # logging.info(f"Current Status: {status}")
     if status == "Создатель 🎭" or status == "Тестер ✨" or status == "Админ 🚗":
         return  # Не менять статус для пользователя с айди
 
-    wins = user_data.get("wins", 0)
-    participation = user_data.get("participation", 0)
+    wins = user_data.get("wins")
+    participation = user_data.get("participation")
 
     if wins == 1:
         status = "Начинающий 🍥"
@@ -1055,6 +1058,10 @@ async def skip_name_callback(query: types.CallbackQuery, state: FSMContext):
     # Установка состояния ожидания ввода описания конкурса
     await CreateContestState.description.set()
 
+# Regular expression pattern to match links
+link_pattern = r"https?://\S+"
+link_regex = re.compile(link_pattern, re.IGNORECASE)
+
 @dp.message_handler(state=CreateContestState.description)
 async def process_description(message: types.Message, state: FSMContext):
     # Получение введенного пользователем описания конкурса
@@ -1064,7 +1071,26 @@ async def process_description(message: types.Message, state: FSMContext):
     await bot.delete_message(message.chat.id, message.message_id)
 
     if not contest_description:
-        contest_description = "Описание отсутсвует 🚫"
+        contest_description = "Описание отсутствует 🚫"
+    else:
+        # Check if the description contains any links and remove them
+        contest_description = link_regex.sub("", contest_description)
+
+        # Check if the description contains any formatting (bold, italics, etc.) and remove them
+        contest_description = contest_description.replace("_", "").replace("*", "").replace("`", "")
+
+    # Check character count and notify the user if it exceeds the limit
+    max_char_count = 1500
+    excess_chars = len(contest_description) - max_char_count
+
+    if excess_chars > 0:
+        contest_description = contest_description[:max_char_count]
+        excess_chars_message = f"\n\n*⚠️ Описание слишком большое и было сокращено на {excess_chars} символов.*"
+        wrong_symbol = await bot.send_message(message.chat.id,
+                                                   excess_chars_message, parse_mode="Markdown")
+        await asyncio.sleep(4)
+        await bot.delete_message(chat_id=message.chat.id, message_id=wrong_symbol.message_id)
+
     # Сохранение описания конкурса (например, в базе данных или переменной)
     await state.update_data(description=contest_description)
 
@@ -1913,8 +1939,21 @@ async def process_search(message: types.Message, state: FSMContext):
 
     global change_message_id
     contest_id = (await state.get_data()).get('contest_id')
+    # Check character count and notify the user if it exceeds the limit
 
     new_description = message.text
+
+    max_char_count = 1500
+    excess_chars = len(new_description) - max_char_count
+
+    if excess_chars > 0:
+        new_description = new_description[:max_char_count]
+        excess_chars_message = f"\n\n*⚠️ Описание слишком большое и было сокращено на {excess_chars} символов.*"
+        wrong_symbol = await bot.send_message(message.chat.id,
+                                              excess_chars_message, parse_mode="Markdown")
+        await asyncio.sleep(4)
+        await bot.delete_message(chat_id=message.chat.id, message_id=wrong_symbol.message_id)
+
     await contests_collection.update_one({"_id": int(contest_id)},
                                       {"$set": {"contest_description": new_description}})
     # Поиск конкурса по айди
@@ -3326,8 +3365,8 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                 if user_data:
                     wins = user_data.get("wins", 0)
                     wins += 1
-                    await update_status(user_id)
                     await user_collections.update_one({"_id": user_id}, {"$set": {"wins": wins}}, upsert=True)
+                    await update_status(user_id)
                     # Отправка личного сообщения пользователю о победе
                     winner_message = f"*🥇 Поздравляем! Вы стали одним из победителей конкурса* `{contest_id}`*!*"
                     await bot.send_message(user_id, winner_message, parse_mode="Markdown")
