@@ -1160,25 +1160,19 @@ async def skip_name_callback(query: types.CallbackQuery, state: FSMContext):
 async def process_description(message: types.Message, state: FSMContext):
     global contest_name, contest_id, contest_description, winners, end_date
 
-    end_date = message.text
+    end_date_str = message.text
 
     await bot.delete_message(message.chat.id, message.message_id)
     message_id = contest_messages[-1]
 
-    # Получаем текущую дату и время
+    # Получаем текущую дату и время (offset-aware)
     today = datetime.now(timezone)
     print(today)
     try:
-        # Проверяем, содержит ли сообщение время (часы и минуты) или только дату
-        if ':' in end_date:
-            # Преобразуем введенную дату и время в формате ДД.ММ.ГГГГ ЧАС:МИНУТЫ
-            end_date = datetime.strptime(message.text, "%d.%m.%Y %H:%M")
-        else:
-            # Преобразуем введенную дату в формате ДД.ММ.ГГГГ
-            end_date = datetime.strptime(message.text, "%d.%m.%Y")
-            # Установка времени на 00:00, если время не указано
-            end_date = end_date.replace(hour=0, minute=0)
-
+        # Преобразуем введенную дату и время в формате ДД.ММ.ГГГГ ЧАС:МИНУТЫ (offset-aware)
+        end_date = datetime.strptime(end_date_str, "%d.%m.%Y %H:%M")
+        end_date = timezone.localize(end_date)
+        print(end_date)
         # Проверяем, что введенная дата и время больше текущей даты и времени
         if end_date <= today:
             old_date = await bot.send_message(message.chat.id, "*Дата и время должны быть больше текущей даты и времени.* 😶", parse_mode="Markdown")
@@ -1192,13 +1186,14 @@ async def process_description(message: types.Message, state: FSMContext):
         await bot.delete_message(chat_id=message.chat.id, message_id=wrong_date_format.message_id)
         return
 
-    if not end_date:
-        end_date = "Дата не указана. 🚫"
+    if not end_date_str:
+        end_date_str = "Дата не указана. 🚫"
     else:
         # Преобразуем объект datetime в строку в формате ДД.ММ.ГГГГ ЧАС:МИНУТЫ
-        end_date = end_date.strftime("%d.%m.%Y %H:%M")
+        end_date_str = end_date.strftime("%d.%m.%Y %H:%M")
 
-    await state.update_data(end_date=end_date)
+    await state.update_data(end_date=end_date_str)
+
 
     data = await state.get_data()
 
@@ -1215,7 +1210,7 @@ async def process_description(message: types.Message, state: FSMContext):
     decline_create = types.InlineKeyboardButton(text='Отменить ❌', callback_data='decline_create')
     keyboard.add(decline_create, confirm_create)
 
-    await bot.edit_message_text(confirmation_text, message.chat.id, message_id, parse_mode="None", reply_markup=keyboard)
+    await bot.edit_message_text(confirmation_text, message.chat.id, message_id, parse_mode="Markdown", reply_markup=keyboard)
 
     # Сброс состояния ожидания ввода ключа
     await state.finish()
@@ -3075,7 +3070,9 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                                       f"*🪁 Имя:* `{contest_name}`\n" \
                                       f"*🧊 Айди конкурса* `{contest_id}`*:*\n" \
                                       f"*🏯 Количество участников:* `{members_message}`\n\n"
-        result_message = "У вас нет активных конкурсов"
+        else:
+            result_message = "*У вас нет активных конкурсов ❌*"
+
         keyboard = types.InlineKeyboardMarkup()
         decline_create = types.InlineKeyboardButton(text='Назад 🧿', callback_data='decline_create')
         contest_check = types.InlineKeyboardButton(text='Управление 🧧', callback_data='contest_check')
