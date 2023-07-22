@@ -3698,13 +3698,13 @@ async def perform_contest_draw(contest_id):
     if len(members) < winners:
         winners_enough_message = "*❌ Участников меньше, чем заданное число победителей, дата конкурса была изменена.*\n\n" \
                                  f"*🧊 Айди конкурса:* `{contest_id}`\n" \
-                                     f"*🥇 Число победителей:* `{winners}`\n" \
-                                     f"*👤 Текущее количество участников:* `{len(members)}`"
+                                 f"*🥇 Число победителей:* `{winners}`\n" \
+                                 f"*👤 Текущее количество участников:* `{len(members)}`"
         await bot.send_message(owner_id, winners_enough_message, parse_mode="Markdown")
         # Update the flag to True since the message has been sent
         await contests_collection.update_one({"_id": int(contest_id)},
                                              {"$set": {"end_date": "Дата не указана. 🚫"}})
-    return
+        return  # Remove this 'return' statement
 
     # Случайный выбор победителей
     random_winners = random.sample(members, winners)
@@ -3806,11 +3806,17 @@ async def check_and_perform_contest_draw():
                     try:
                         # Преобразование времени окончания в объект datetime с учетом часового пояса
                         end_date = timezone.localize(datetime.strptime(str(end_date_str), "%d.%m.%Y %H:%M"))
+                        print(end_date)
+                        print(current_time)
                         # Сравнение текущего времени с временем окончания
                         if current_time >= end_date:
+                            print(current_time)
                             await perform_contest_draw(contest_id)
                     except ValueError:
                         pass
+
+        # Wait for 1 minute before checking again
+        await asyncio.sleep(10)
 
 # log
 logging.basicConfig(level=logging.INFO)
