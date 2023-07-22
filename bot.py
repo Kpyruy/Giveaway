@@ -3806,11 +3806,8 @@ async def check_and_perform_contest_draw():
                     try:
                         # Преобразование времени окончания в объект datetime с учетом часового пояса
                         end_date = timezone.localize(datetime.strptime(str(end_date_str), "%d.%m.%Y %H:%M"))
-                        print(end_date)
-                        print(current_time)
                         # Сравнение текущего времени с временем окончания
                         if current_time >= end_date:
-                            print(current_time)
                             await perform_contest_draw(contest_id)
                     except ValueError:
                         pass
