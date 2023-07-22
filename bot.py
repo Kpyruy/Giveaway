@@ -3788,7 +3788,7 @@ async def check_and_perform_contest_draw():
     while True:
         # Convert the current time to your specified timezone
         current_time = datetime.now(timezone)
-        print(current_time)
+
         # Получение всех конкурсов
         contests = await contests_collection.find().to_list(length=None)
 
@@ -3806,7 +3806,6 @@ async def check_and_perform_contest_draw():
                     try:
                         # Преобразование времени окончания в объект datetime с учетом часового пояса
                         end_date = timezone.localize(datetime.strptime(str(end_date_str), "%d.%m.%Y %H:%M"))
-                        print(end_date)
                         # Сравнение текущего времени с временем окончания
                         if current_time >= end_date:
                             await perform_contest_draw(contest_id)
