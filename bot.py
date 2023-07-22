@@ -1167,23 +1167,31 @@ async def process_description(message: types.Message, state: FSMContext):
 
     # Получаем текущую дату и время (offset-aware)
     today = datetime.now(timezone)
-    print(today)
+
     try:
         # Преобразуем введенную дату и время в формате ДД.ММ.ГГГГ ЧАС:МИНУТЫ (offset-aware)
         end_date = datetime.strptime(end_date_str, "%d.%m.%Y %H:%M")
-        end_date = timezone.localize(end_date)
-        print(end_date)
-        # Проверяем, что введенная дата и время больше текущей даты и времени
-        if end_date <= today:
-            old_date = await bot.send_message(message.chat.id, "*Дата и время должны быть больше текущей даты и времени.* 😶", parse_mode="Markdown")
+    except ValueError:
+        try:
+            # If the above parsing fails, try parsing the date without time
+            end_date = datetime.strptime(end_date_str, "%d.%m.%Y")
+            # Set the time to midnight (00:00)
+            end_date = end_date.replace(hour=0, minute=0)
+        except ValueError:
+            # If both parsing attempts fail, it means the date format is incorrect
+            wrong_date_format = await bot.send_message(message.chat.id, "*Неверный формат даты! Введите дату в формате* `ДД.ММ.ГГГГ.` *или* `ДД.ММ.ГГГГ. ЧАС:МИНУТЫ` ❌", parse_mode="Markdown")
             await asyncio.sleep(3)
-            await bot.delete_message(chat_id=message.chat.id, message_id=old_date.message_id)
+            await bot.delete_message(chat_id=message.chat.id, message_id=wrong_date_format.message_id)
             return
 
-    except ValueError:
-        wrong_date_format = await bot.send_message(message.chat.id, "*Неверный формат даты! Введите дату в формате* `ДД.ММ.ГГГГ.` *или* `ДД.ММ.ГГГГ. ЧАС:МИНУТЫ` ❌", parse_mode="Markdown")
+    # Making end_date offset-aware using the same timezone
+    end_date = timezone.localize(end_date)
+
+    # Проверяем, что введенная дата и время больше текущей даты и времени
+    if end_date <= today:
+        old_date = await bot.send_message(message.chat.id, "*Дата и время должны быть больше текущей даты и времени.* 😶", parse_mode="Markdown")
         await asyncio.sleep(3)
-        await bot.delete_message(chat_id=message.chat.id, message_id=wrong_date_format.message_id)
+        await bot.delete_message(chat_id=message.chat.id, message_id=old_date.message_id)
         return
 
     if not end_date_str:
@@ -1193,7 +1201,6 @@ async def process_description(message: types.Message, state: FSMContext):
         end_date_str = end_date.strftime("%d.%m.%Y %H:%M")
 
     await state.update_data(end_date=end_date_str)
-
 
     data = await state.get_data()
 
@@ -2222,47 +2229,45 @@ async def process_search(message: types.Message, state: FSMContext):
     global change_message_id
     contest_id = (await state.get_data()).get('contest_id')
 
-    new_date = message.text
+    new_date_str = message.text
 
     # Получаем текущую дату и время
-    today = datetime.now()
+    today = datetime.now(timezone)
 
     try:
-        # Проверяем, содержит ли сообщение время (часы и минуты) или только дату
-        if ':' in new_date:
-            # Преобразуем введенную дату и время в формате ДД.ММ.ГГГГ ЧАС:МИНУТЫ
-            new_date = datetime.strptime(message.text, "%d.%m.%Y %H:%M")
-        else:
-            # Преобразуем введенную дату в формате ДД.ММ.ГГГГ
-            new_date = datetime.strptime(message.text, "%d.%m.%Y")
-            # Установка времени на 00:00, если время не указано
+        # Преобразуем введенную дату и время в формате ДД.ММ.ГГГГ ЧАС:МИНУТЫ (offset-aware)
+        new_date = datetime.strptime(new_date_str, "%d.%m.%Y %H:%M")
+    except ValueError:
+        try:
+            # If the above parsing fails, try parsing the date without time
+            new_date = datetime.strptime(new_date_str, "%d.%m.%Y")
+            # Set the time to midnight (00:00)
             new_date = new_date.replace(hour=0, minute=0)
-
-        # Проверяем, что введенная дата и время больше текущей даты и времени
-        if new_date <= today:
-            old_date = await bot.send_message(message.chat.id,
-                                              "*Дата и время должны быть больше текущей даты и времени.* 😶",
-                                              parse_mode="Markdown")
+        except ValueError:
+            # If both parsing attempts fail, it means the date format is incorrect
+            wrong_date_format = await bot.send_message(message.chat.id, "*Неверный формат даты! Введите дату в формате* `ДД.ММ.ГГГГ.` *или* `ДД.ММ.ГГГГ. ЧАС:МИНУТЫ` ❌", parse_mode="Markdown")
             await asyncio.sleep(3)
-            await bot.delete_message(chat_id=message.chat.id, message_id=old_date.message_id)
+            await bot.delete_message(chat_id=message.chat.id, message_id=wrong_date_format.message_id)
             return
 
-    except ValueError:
-        wrong_date_format = await bot.send_message(message.chat.id,
-                                                   "*Неверный формат даты! Введите дату в формате* `ДД.ММ.ГГГГ.` *или* `ДД.ММ.ГГГГ. ЧАС:МИНУТЫ` ❌",
-                                                   parse_mode="Markdown")
+    # Making end_date offset-aware using the same timezone
+    new_date = timezone.localize(new_date)
+
+    # Проверяем, что введенная дата и время больше текущей даты и времени
+    if new_date <= today:
+        old_date = await bot.send_message(message.chat.id, "*Дата и время должны быть больше текущей даты и времени.* 😶", parse_mode="Markdown")
         await asyncio.sleep(3)
-        await bot.delete_message(chat_id=message.chat.id, message_id=wrong_date_format.message_id)
+        await bot.delete_message(chat_id=message.chat.id, message_id=old_date.message_id)
         return
 
-    if not new_date:
-        new_date = "Дата не указана. 🚫"
+    if not new_date_str:
+        new_date_str = "Дата не указана. 🚫"
     else:
         # Преобразуем объект datetime в строку в формате ДД.ММ.ГГГГ ЧАС:МИНУТЫ
-        new_date = new_date.strftime("%d.%m.%Y %H:%M")
+        new_date_str = new_date.strftime("%d.%m.%Y %H:%M")
 
     await contests_collection.update_one({"_id": int(contest_id)},
-                                      {"$set": {"end_date": new_date}})
+                                      {"$set": {"end_date": new_date_str}})
     # Поиск конкурса по айди
     contest = await contests_collection.find_one({"_id": int(contest_id)})
 
@@ -3676,7 +3681,6 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         await bot.edit_message_text(result_message, callback_query.message.chat.id, callback_query.message.message_id, parse_mode="Markdown",
                                     reply_markup=keyboard)
 
-
     elif button_text == 'done':
 
         await bot.answer_callback_query(callback_query.id, text="Задача была выполнена успешно! ✔️")
@@ -3784,7 +3788,7 @@ async def check_and_perform_contest_draw():
     while True:
         # Convert the current time to your specified timezone
         current_time = datetime.now(timezone)
-
+        print(current_time)
         # Получение всех конкурсов
         contests = await contests_collection.find().to_list(length=None)
 
@@ -3802,6 +3806,7 @@ async def check_and_perform_contest_draw():
                     try:
                         # Преобразование времени окончания в объект datetime с учетом часового пояса
                         end_date = timezone.localize(datetime.strptime(str(end_date_str), "%d.%m.%Y %H:%M"))
+                        print(end_date)
                         # Сравнение текущего времени с временем окончания
                         if current_time >= end_date:
                             await perform_contest_draw(contest_id)
