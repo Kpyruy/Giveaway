@@ -798,7 +798,7 @@ async def start_contest_command(message: types.Message):
     user_id = message.from_user.id
     user_data = await user_collections.find_one({"_id": user_id})
 
-    if user_data and (("status" in user_data and user_data["status"] in ["Тестер ✨", "Админ 🚗", "Создатель 🎭"]) or int(user_data.get("keys", 0)) > 0):
+    if user_data and (("status" in user_data and user_data["status"] in ["Тестер 🔰", "Админ 🚗", "Создатель 🎭"]) or int(user_data.get("keys", 0)) > 0):
 
         # Код для существующего пользователя
         keyboard = types.InlineKeyboardMarkup()
@@ -856,7 +856,7 @@ async def input_key_decline_callback(callback_query: types.CallbackQuery, state:
     user_id = callback_query.from_user.id
     user_data = await user_collections.find_one({"_id": user_id})
 
-    if user_data and (("status" in user_data and user_data["status"] in ["Тестер ✨", "Админ 🚗", "Создатель 🎭"]) or int(
+    if user_data and (("status" in user_data and user_data["status"] in ["Тестер 🔰", "Админ 🚗", "Создатель 🎭"]) or int(
             user_data.get("keys", 0)) > 0):
         # Code for existing user
         keyboard = types.InlineKeyboardMarkup()
@@ -1262,7 +1262,7 @@ async def decline_search_callback(callback_query: types.CallbackQuery, state: FS
     user_id = callback_query.from_user.id
     user_data = await user_collections.find_one({"_id": user_id})
 
-    if user_data and (("status" in user_data and user_data["status"] in ["Тестер ✨", "Админ 🚗", "Создатель 🎭"]) or int(user_data.get("keys", 0)) > 0):
+    if user_data and (("status" in user_data and user_data["status"] in ["Тестер 🔰", "Админ 🚗", "Создатель 🎭"]) or int(user_data.get("keys", 0)) > 0):
 
         # Код для существующего пользователя
         keyboard = types.InlineKeyboardMarkup()
@@ -2677,13 +2677,13 @@ async def get_user_profile(message: types.Message):
     # Get the user ID from the command arguments
     args = message.get_args()
     if not args:
-        await message.reply("Пожалуйста укажите айди. Пример: /id <айди>")
+        await message.reply("🔰 Пожалуйста укажите айди. Пример: /id <айди>")
         return
 
     try:
         user_id = int(args)
     except ValueError:
-        await message.reply("Инвалид. Пожалуйста, укажите правильный айди.")
+        await message.reply("👩‍🦽 Инвалид. Пожалуйста, укажите правильный айди.")
         return
 
     try:
@@ -2696,13 +2696,13 @@ async def get_user_profile(message: types.Message):
         # Create the message showing the user profile
         if username:
             result_message = f"Профиль 📒\n" \
-                             f"Тэг: @{username}\n"
+                             f"👥 Тэг: @{username}\n"
         else:
             result_message = "Юзернейм отсутствует ❌\n\n"
 
         # Add first name and last name if available
         if first_name:
-            result_message += f"Имя: {first_name}"
+            result_message += f"🍭 Имя: {first_name}"
         if last_name:
             result_message += f" {last_name}"
 
@@ -2861,7 +2861,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         user_data = await user_collections.find_one({"_id": user_id})
 
         if user_data and (
-                ("status" in user_data and user_data["status"] in ["Тестер ✨", "Админ 🚗", "Создатель 🎭"]) or int(
+                ("status" in user_data and user_data["status"] in ["Тестер 🔰", "Админ 🚗", "Создатель 🎭"]) or int(
                 user_data.get("keys", 0)) > 0):
             # Code for existing user
             keyboard = types.InlineKeyboardMarkup()
@@ -2918,7 +2918,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         user_id = callback_query.from_user.id
         user_data = await user_collections.find_one({"_id": user_id})
 
-        if user_data and ("status" in user_data and user_data["status"] in ["Тестер ✨", "Админ 🚗", "Создатель 🎭"]):
+        if user_data and ("status" in user_data and user_data["status"] in ["Тестер 🔰", "Админ 🚗", "Создатель 🎭"]):
             pass
         else:
             await user_collections.update_one({"_id": user_id}, {"$inc": {"keys": -1}})
@@ -2945,7 +2945,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         user_data = await user_collections.find_one({"_id": user_id})
 
         if user_data and (
-                ("status" in user_data and user_data["status"] in ["Тестер ✨", "Админ 🚗", "Создатель 🎭"]) or int(
+                ("status" in user_data and user_data["status"] in ["Тестер 🔰", "Админ 🚗", "Создатель 🎭"]) or int(
                 user_data.get("keys", 0)) > 0):
 
             # Код для существующего пользователя
@@ -3871,13 +3871,17 @@ async def update_statuses():
     while True:
         # Получение всех пользователей
         users = await user_collections.find().to_list(length=None)
-
+        status = user_data.get("status")
+        if status == "Создатель 🎭" or status == "Тестер 🔰" or status == "Админ 🚗":
+            return  # Не менять статус для пользователя с айди
         for user in users:
             user_id = user.get("_id")
             wins = user.get("wins", 0)
             participation = user.get("participation", 0)
 
-            if wins == 1:
+            if wins == 0 or participation == 0:
+                status = "Новичок 🆕"
+            elif wins == 1:
                 status = "Начинающий 🍥"
             elif wins == 5:
                 status = "Юный победитель 🥮"
