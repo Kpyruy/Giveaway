@@ -83,45 +83,6 @@ async def add_user(user_id):
     }
     user_collections.insert_one(user_data)
 
-async def update_status(user_id):
-    user_data = await user_collections.find_one({"_id": user_id})
-    # logging.info(f"User Data for user {user_id}: {user_data}")
-
-    status = user_data.get("status")
-    # logging.info(f"Current Status: {status}")
-    if status == "Создатель 🎭" or status == "Тестер ✨" or status == "Админ 🚗":
-        return  # Не менять статус для пользователя с айди
-
-    wins = user_data.get("wins")
-    participation = user_data.get("participation")
-
-    if wins == 1:
-        status = "Начинающий 🍥"
-    elif wins == 5:
-        status = "Юный победитель 🥮"
-    elif wins == 10:
-        status = "Молодчик 🧋"
-    elif wins == 15:
-        status = "Удачливый 🤞"
-    elif wins == 25:
-        status = "Лакер 🍀"
-    elif wins == 50:
-        status = "Уникум ♾️"
-    elif participation == 5:
-        status = "Начало положено 🍤"
-    elif participation == 15:
-        status = "Активный 🦈"
-    elif participation == 25:
-        status = "Батарейка 🔋"
-    elif participation == 50:
-        status = "Смотрящий 👀"
-    elif participation == 100:
-        status = "Невероятный 🧭"
-    else:
-        return  # Не менять статус, если не подходит ни одно условие
-
-    await user_collections.update_one({"_id": user_id}, {"$set": {"status": status}})
-
 # Get the bot's username from the bot instance
 async def get_bot_username() -> str:
     bot_info = await bot.get_me()
@@ -653,7 +614,6 @@ async def start_command(message: types.Message):
                         keyboard.row(profile)
 
                         # Обновление статуса пользователя
-                        await update_status(user_id)
                         await update_contest_date(contest_id)
                         await message.reply(
                             f"*🎭 Вы успешно добавлены в конкурс* `{contest_id}`*!*\n\n"
@@ -712,7 +672,6 @@ async def start_command(message: types.Message):
                         "*🪶 Воспользуйтесь кнопками для дальнейшего взаимодействия:*",
                         parse_mode="Markdown", reply_markup=keyboard
                     )
-                    await update_status(user_id)
                     await update_contest_date(contest_id)
                     return
             else:
@@ -3366,7 +3325,6 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                     wins = user_data.get("wins", 0)
                     wins += 1
                     await user_collections.update_one({"_id": user_id}, {"$set": {"wins": wins}}, upsert=True)
-                    await update_status(user_id)
                     # Отправка личного сообщения пользователю о победе
                     winner_message = f"*🥇 Поздравляем! Вы стали одним из победителей конкурса* `{contest_id}`*!*"
                     await bot.send_message(user_id, winner_message, parse_mode="Markdown")
@@ -3396,7 +3354,6 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             if user_data:
                 wins = user_data.get("wins", 0)
                 wins += 1
-                await update_status(user_id)
                 await user_collections.update_one({"_id": user_id}, {"$set": {"wins": wins}}, upsert=True)
                 # Отправка личного сообщения пользователю о победе
                 winner_message = f"*🥇 Поздравляем! Вы стали победителем конкурса* `{contest_id}`*!*"
@@ -3770,7 +3727,6 @@ async def perform_contest_draw(contest_id):
             if user_data:
                 wins = user_data.get("wins", 0)
                 wins += 1
-                await update_status(user_id)
                 await user_collections.update_one({"_id": user_id}, {"$set": {"wins": wins}}, upsert=True)
                 # Отправка личного сообщения пользователю о победе
                 winner_message = f"*🥇 Поздравляем! Вы стали одним из победителей конкурса* `{contest_id}`*!*"
@@ -3801,7 +3757,6 @@ async def perform_contest_draw(contest_id):
         if user_data:
             wins = user_data.get("wins", 0)
             wins += 1
-            await update_status(user_id)
             await user_collections.update_one({"_id": user_id}, {"$set": {"wins": wins}}, upsert=True)
             # Отправка личного сообщения пользователю о победе
             winner_message = f"*🥇 Поздравляем! Вы стали победителем конкурса* `{contest_id}`*!*"
@@ -3910,6 +3865,49 @@ logging.basicConfig(level=logging.INFO)
 #     # Отправляем ответ о успешной предварительной проверке
 #     await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
+# Асинхронная функция для обновления статусов пользователей каждую секунду
+
+async def update_statuses():
+    while True:
+        # Получение всех пользователей
+        users = await user_collections.find().to_list(length=None)
+
+        for user in users:
+            user_id = user.get("_id")
+            wins = user.get("wins", 0)
+            participation = user.get("participation", 0)
+
+            if wins == 1:
+                status = "Начинающий 🍥"
+            elif wins == 5:
+                status = "Юный победитель 🥮"
+            elif wins == 10:
+                status = "Молодчик 🧋"
+            elif wins == 15:
+                status = "Удачливый 🤞"
+            elif wins == 25:
+                status = "Лакер 🍀"
+            elif wins == 50:
+                status = "Уникум ♾️"
+            elif participation == 5:
+                status = "Начало положено 🍤"
+            elif participation == 15:
+                status = "Активный 🦈"
+            elif participation == 25:
+                status = "Батарейка 🔋"
+            elif participation == 50:
+                status = "Смотрящий 👀"
+            elif participation == 100:
+                status = "Невероятный 🧭"
+            else:
+                status = None  # Не менять статус, если не подходит ни одно условие
+
+            if status:
+                await user_collections.update_one({"_id": user_id}, {"$set": {"status": status}})
+
+        # Подождать 1 секунду перед следующей проверкой и обновлением статусов
+        await asyncio.sleep(1)
+
 async def main():
     # Запуск бота
     await dp.start_polling()
@@ -3918,12 +3916,14 @@ async def main():
 contest_draw_loop = asyncio.get_event_loop()
 contest_draw_task = contest_draw_loop.create_task(check_and_perform_contest_draw())
 
+# Создание и запуск асинхронного цикла для функции обновления статусов пользователей
+update_statuses_task = asyncio.get_event_loop().create_task(update_statuses())
+
 # Запуск основного асинхронного цикла для работы бота
 bot_loop = asyncio.get_event_loop()
 bot_task = bot_loop.create_task(main())
 
-# Запуск обоих задач
+# Запуск всех задач
 loop = asyncio.get_event_loop()
-
-tasks = asyncio.gather(contest_draw_task, bot_task)
+tasks = asyncio.gather(contest_draw_task, bot_task, update_statuses_task)
 loop.run_until_complete(tasks)
