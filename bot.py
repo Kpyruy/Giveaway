@@ -3871,14 +3871,15 @@ async def update_statuses():
     while True:
         # Получение всех пользователей
         users = await user_collections.find().to_list(length=None)
-        status = user.get("status")
 
-        if status == "Создатель 🎭" or status == "Тестер 🔰" or status == "Админ 🚗":
-            return  # Не менять статус для пользователя с айди
         for user in users:
+            status = user.get("status")
             user_id = user.get("_id")
             wins = user.get("wins", 0)
             participation = user.get("participation", 0)
+
+            if status == "Создатель 🎭" or status == "Тестер 🔰" or status == "Админ 🚗":
+                return  # Не менять статус для пользователя с айди
 
             if wins == 0 or participation == 0:
                 status = "Новичок 🆕"
