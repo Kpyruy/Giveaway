@@ -3871,7 +3871,8 @@ async def update_statuses():
     while True:
         # Получение всех пользователей
         users = await user_collections.find().to_list(length=None)
-        status = user_data.get("status")
+        status = user.get("status")
+
         if status == "Создатель 🎭" or status == "Тестер 🔰" or status == "Админ 🚗":
             return  # Не менять статус для пользователя с айди
         for user in users:
