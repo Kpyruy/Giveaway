@@ -3873,13 +3873,13 @@ async def update_statuses():
         users = await user_collections.find().to_list(length=None)
 
         for user in users:
-            status = user.get("status")
             user_id = user.get("_id")
             wins = user.get("wins", 0)
             participation = user.get("participation", 0)
 
-            if status == "Создатель 🎭" or status == "Тестер 🔰" or status == "Админ 🚗":
-                return  # Не менять статус для пользователя с айди
+            status = user.get("status")
+            if status in ["Создатель 🎭", "Тестер 🔰", "Админ 🚗"]:
+                continue  # Пропустить пользователя с этим статусом
 
             if wins == 0 or participation == 0:
                 status = "Новичок 🆕"
