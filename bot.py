@@ -2560,7 +2560,7 @@ async def process_promo_command(message: types.Message):
                 # Обработка команды /promo (сам промокод)
                 promo_code = args
                 await handle_promo_code(promo_code, message.from_user.id, message.chat.id)
-            if len(parts) == 2:
+            elif len(parts) == 2:
                 # Обработка команды /promo (название) (количество)
                 promo_name = parts[0]
                 quantity = int(parts[1])
