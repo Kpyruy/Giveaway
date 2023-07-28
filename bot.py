@@ -2559,8 +2559,8 @@ async def process_promo_command(message: types.Message):
     parts = args.split(' ')
     if args:
         user_data = await user_collections.find_one({"_id": message.from_user.id})
-        status = user_data.get("status")
-        if status:
+        if user_data:
+            status = user_data.get("status")
             if status == "Создатель 🎭" or status == "Админ 🚗":
                 if len(parts) == 1:
                     # Обработка команды /promo (сам промокод)
