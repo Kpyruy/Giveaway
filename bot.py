@@ -21,6 +21,9 @@ import logging
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.dispatcher.handler import CancelHandler, current_handler
 
+logging.getLogger('aiogram').setLevel(logging.DEBUG)
+logging.getLogger('aiogram.dispatcher').setLevel(logging.DEBUG)
+
 cluster = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://Admin:T8Lylcpso9jNs5Yw@cluster0.1t9opzs.mongodb.net/RandomBot?retryWrites=true&w=majority")
 user_collections = cluster.RandomBot.user
 key_collection = cluster.RandomBot.key
