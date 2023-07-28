@@ -2555,7 +2555,7 @@ async def start_contest_command(message: types.Message):
 async def process_promo_command(message: types.Message):
     args = message.get_args()
     chat_id = message.chat.id
-
+    print(chat_id)
     parts = args.split(' ')
     if args:
         user_data = await user_collections.find_one({"_id": message.from_user.id})
