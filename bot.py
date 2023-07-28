@@ -2554,6 +2554,7 @@ async def start_contest_command(message: types.Message):
 @dp.message_handler(commands=['promo'])
 async def process_promo_command(message: types.Message):
     args = message.get_args()
+    chat_id = message.chat.id
 
     parts = args.split(' ')
     if args:
@@ -2563,7 +2564,7 @@ async def process_promo_command(message: types.Message):
             if len(parts) == 1:
                 # Обработка команды /promo (сам промокод)
                 promo_code = args
-                await handle_promo_code(promo_code, message.from_user.id, message.chat.id)
+                await handle_promo_code(promo_code, message.from_user.id, chat_id)
             elif len(parts) == 2:
                 # Обработка команды /promo (название) (количество)
                 promo_name = parts[0]
@@ -2600,7 +2601,7 @@ async def process_promo_command(message: types.Message):
             if len(parts) == 1:
                 # Обработка команды /promo (сам промокод)
                 promo_code = args
-                await handle_promo_code(promo_code, message.from_user.id, message.chat.id)
+                await handle_promo_code(promo_code, message.from_user.id, chat_id)
     else:
         active_promos = await get_active_promo_codes()
         if active_promos:
