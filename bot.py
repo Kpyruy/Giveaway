@@ -11,6 +11,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 from aiogram.types.message import ContentType
 from aiogram.dispatcher.filters import Command
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.utils.exceptions import TelegramAPIError
 from aiogram.utils import executor
 from configparser import ConfigParser
 from pymongo import MongoClient
@@ -21,8 +22,12 @@ import logging
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.dispatcher.handler import CancelHandler, current_handler
 
-logging.getLogger('aiogram').setLevel(logging.DEBUG)
-logging.getLogger('aiogram.dispatcher').setLevel(logging.DEBUG)
+logging.basicConfig(
+    level=logging.DEBUG,  # Set the logging level to DEBUG to log everything
+    filename='private/bot.log',   # Log everything to a file named 'bot.log'
+    filemode='w',         # 'w' will overwrite the file each time the script runs, use 'a' to append instead
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 cluster = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://Admin:T8Lylcpso9jNs5Yw@cluster0.1t9opzs.mongodb.net/RandomBot?retryWrites=true&w=majority")
 user_collections = cluster.RandomBot.user
@@ -2677,27 +2682,18 @@ async def start_contest_command(message: types.Message):
 
     await message.reply(profile, parse_mode="Markdown", reply_markup=inline_keyboard)
 
-# Обработчик команды для очистки личных чатов с пользователями
-@dp.message_handler(commands=['clear_all_chats'])
-async def clear_all_user_chats(message: types.Message):
-    # Get all _id users from the database
-    all_user_data = await user_collections.find(projection={"_id": 1}).to_list(length=None)
+# Обработчик команды для получения лог файла в канал
+@dp.message_handler(commands=['log'])
+async def send_log_to_channel_command(message: types.Message):
+    chat_id = -1001855834243  # Replace with your desired channel ID
+    log_file_path = 'private/bot.log'
 
-    if all_user_data:
-        chat_id_list = [user_data["_id"] for user_data in all_user_data]
-
-        for chat_id in chat_id_list:
-            # Wait a while before deleting the next chat (about 1 second)
-            await asyncio.sleep(0.1)
-
-            try:
-                # You need to keep track of the message_id when the bot sends a message
-                # Here messages is a list or other data structure that holds all the stored message IDs
-                messages = get_list_of_message_ids_for_this_chat_id(chat_id)
-                for msg_id in messages:
-                    await bot.delete_message(chat_id, msg_id)
-            except Exception as e:
-                print(f"Failed to delete messages in chat {chat_id}: {e}")
+    with open(log_file_path, 'rb') as log_file:
+        try:
+            await bot.send_message(chat_id, "*🚧 Log file:*", parse_mode="Markdown")
+            await bot.send_document(chat_id, log_file)
+        except TelegramAPIError as e:
+            logging.error(f"Error while sending log to channel: {str(e)}")
 
 @dp.message_handler(commands=['id'])
 async def get_user_profile(message: types.Message):
@@ -3942,7 +3938,7 @@ async def update_statuses():
         await asyncio.sleep(1)
 
 async def main():
-    # Запуск бота
+    # Start the bot
     await dp.start_polling()
 
 # Создание и запуск асинхронного цикла для функции проверки и выполнения розыгрыша конкурсов
