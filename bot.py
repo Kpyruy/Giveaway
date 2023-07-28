@@ -2596,7 +2596,7 @@ async def process_promo_command(message: types.Message):
             if len(parts) == 1:
                 # Обработка команды /promo (сам промокод)
                 promo_code = args
-                await handle_promo_code(promo_code, message.from_user.id)
+                await handle_promo_code(promo_code, message.from_user.id, message.chat.id)
     else:
         active_promos = await get_active_promo_codes()
         if active_promos:
