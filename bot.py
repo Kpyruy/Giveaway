@@ -420,14 +420,17 @@ async def handle_promo_code(promo_code: str, user_id: int, chat_id: int):
         active_members = promo.get("active_members", [])
 
         if user_id in active_members:
+            print(chat_id, " активирован")
             await bot.send_message(chat_id, "*❌ Вы уже активировали данный промокод.*", parse_mode="Markdown")
         else:
             uses = promo.get("uses", 0)
             if uses > 0:
                 await activate_promo_code(promo_code, user_id, chat_id)
             else:
+                print(chat_id, " не действилен")
                 await bot.send_message(chat_id, "*❌ Промокод больше не действителен.*", parse_mode="Markdown")
     else:
+        print(chat_id, " не найден")
         await bot.send_message(chat_id, "*Промокод не найден. ❌*", parse_mode="Markdown")
 
 async def create_promo_codes(promo_name: str, quantity: int, visible: str, prize: str, user_id: int):
@@ -526,6 +529,7 @@ async def activate_promo_code(promo_code: str, user_id: int, chat_id: int):
         await user_collections.update_one({"_id": user_id}, {"$inc": {"keys": 1}})
     else:
         pass
+    print(chat_id, " успешно")
     await bot.send_message(chat_id, f"*Промокод* `{promo_code}` *активирован. ✅*", parse_mode="Markdown")
 
 def generate_promo_code():
