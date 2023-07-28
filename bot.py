@@ -416,7 +416,7 @@ async def promo_members(chat_id, promo, current_page):
 # Add this at the beginning of your script to enable logging
 logging.basicConfig(level=logging.INFO)
 
-async def handle_promo_code(promo_code: str, user_id: int, chat_id: int):
+async def handle_promo_code(promo_code: str, user_id: int, chat_id):
     try:
         promo = await promo_collection.find_one({"_id": promo_code})
 
@@ -526,19 +526,25 @@ async def get_active_promo_codes():
         return None
 
 async def activate_promo_code(promo_code: str, user_id: int, chat_id: int):
-    await promo_collection.update_one({"_id": promo_code}, {"$push": {"active_members": user_id}})
-    await promo_collection.update_one({"_id": promo_code}, {"$inc": {"uses": -1}})
+    try:
 
-    promo = await promo_collection.find_one({"_id": promo_code})
-    prize = promo.get("prize")
-    if prize == "None":
-        pass
-    elif prize == "key":
-        await user_collections.update_one({"_id": user_id}, {"$inc": {"keys": 1}})
-    else:
-        pass
-    print(chat_id, " успешно")
-    await bot.send_message(chat_id, f"*Промокод* `{promo_code}` *активирован. ✅*", parse_mode="Markdown")
+        await promo_collection.update_one({"_id": promo_code}, {"$push": {"active_members": user_id}})
+        await promo_collection.update_one({"_id": promo_code}, {"$inc": {"uses": -1}})
+
+        promo = await promo_collection.find_one({"_id": promo_code})
+        prize = promo.get("prize")
+        if prize == "None":
+            pass
+        elif prize == "key":
+            await user_collections.update_one({"_id": user_id}, {"$inc": {"keys": 1}})
+        else:
+            pass
+        logging.info(f"{chat_id} успешно")
+        await bot.send_message(chat_id, f"*Промокод* `{promo_code}` *активирован. ✅*", parse_mode="Markdown")
+    except Exception as e:
+        logging.error(f"Error in handle_promo_code: {str(e)}")
+        await bot.send_message(chat_id, "*❌ Произошла ошибка при обработке промокода. Попробуйте позже.*",
+                               parse_mode="Markdown")
 
 def generate_promo_code():
     promo_length = 8  # Длина промокода
@@ -2562,8 +2568,7 @@ async def start_contest_command(message: types.Message):
 @dp.message_handler(commands=['promo'])
 async def process_promo_command(message: types.Message):
     args = message.get_args()
-    chat_id = message.chat.id
-    print(chat_id)
+
     parts = args.split(' ')
     if args:
         user_data = await user_collections.find_one({"_id": message.from_user.id})
@@ -2573,7 +2578,7 @@ async def process_promo_command(message: types.Message):
                 if len(parts) == 1:
                     # Обработка команды /promo (сам промокод)
                     promo_code = args
-                    await handle_promo_code(promo_code, message.from_user.id, chat_id)
+                    await handle_promo_code(promo_code, message.from_user.id, chat_id=message.chat.id)
                 elif len(parts) == 2:
                     # Обработка команды /promo (название) (количество)
                     promo_name = parts[0]
@@ -2592,6 +2597,7 @@ async def process_promo_command(message: types.Message):
                         visible = "True"
                     prize = "None"
                     await create_promo_codes(promo_name, quantity, visible, prize, message.from_user.id)
+
                 if status == "Создатель 🎭":
                     if len(parts) == 4:
                         # Обработка команды /promo (название) (количество) (видимость) (награда)
@@ -2610,18 +2616,19 @@ async def process_promo_command(message: types.Message):
                 if len(parts) == 1:
                     # Обработка команды /promo (сам промокод)
                     promo_code = args
-                    await handle_promo_code(promo_code, message.from_user.id, chat_id)
+                    await handle_promo_code(promo_code, message.from_user.id, chat_id=message.chat.id)
         else:
-            await message.reply(f"*❌ Вы не зарегестированы в боте!*\n"
-                                f"*🔰 Для регистрации напишите /start мне в личные сообщения.*", parse_mode="Markdown")
+            unreg = f"*❌ Вы не зарегестированы в боте!*\n*🔰 Для регистрации напишите /start мне в личные сообщения.*"
+            await bot.send_message(message.chat.id, unreg, parse_mode="Markdown")
     else:
         active_promos = await get_active_promo_codes()
         if active_promos:
-            await message.reply(f"*📽️ Активные промокоды:*\n{active_promos}\n\n"
-                                "*🧪 Для активации промокода* /promo `{промокод}`", parse_mode="Markdown")
+            promos = f"*📽️ Активные промокоды:*\n{active_promos}\n\n" \
+                     "*🧪 Для активации промокода* /promo `{промокод}`"
         else:
-            await message.reply("*🤫 Активных промокодов не обнаружено!*\n\n"
-                                "*🧪 Для активации промокода* /promo `{промокод}`", parse_mode="Markdown")
+            promos = "*🤫 Активных промокодов не обнаружено!*\n\n" \
+                     "*🧪 Для активации промокода* /promo `{промокод}`"
+        await bot.send_message(message.chat.id, promos, parse_mode="Markdown")
 
 # Команда для просмотра всех кто активировал промокод
 @dp.message_handler(commands=['promo_list'])
