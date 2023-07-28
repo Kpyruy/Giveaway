@@ -413,25 +413,33 @@ async def promo_members(chat_id, promo, current_page):
     # Сохранение ID сообщения в глобальную переменную
     promo_message_id.append(reply.message_id)
 
+# Add this at the beginning of your script to enable logging
+logging.basicConfig(level=logging.INFO)
+
 async def handle_promo_code(promo_code: str, user_id: int, chat_id: int):
-    promo = await promo_collection.find_one({"_id": promo_code})
+    try:
+        promo = await promo_collection.find_one({"_id": promo_code})
 
-    if promo:
-        active_members = promo.get("active_members", [])
+        if promo:
+            active_members = promo.get("active_members", [])
 
-        if user_id in active_members:
-            print(chat_id, " активирован")
-            await bot.send_message(chat_id, "*❌ Вы уже активировали данный промокод.*", parse_mode="Markdown")
-        else:
-            uses = promo.get("uses", 0)
-            if uses > 0:
-                await activate_promo_code(promo_code, user_id, chat_id)
+            if user_id in active_members:
+                logging.info(f"{chat_id} активирован")
+                await bot.send_message(chat_id, "*❌ Вы уже активировали данный промокод.*", parse_mode="Markdown")
             else:
-                print(chat_id, " не действилен")
-                await bot.send_message(chat_id, "*❌ Промокод больше не действителен.*", parse_mode="Markdown")
-    else:
-        print(chat_id, " не найден")
-        await bot.send_message(chat_id, "*Промокод не найден. ❌*", parse_mode="Markdown")
+                uses = promo.get("uses", 0)
+                if uses > 0:
+                    await activate_promo_code(promo_code, user_id, chat_id)
+                else:
+                    logging.info(f"{chat_id} не действителен")
+                    await bot.send_message(chat_id, "*❌ Промокод больше не действителен.*", parse_mode="Markdown")
+        else:
+            logging.info(f"{chat_id} не найден")
+            await bot.send_message(chat_id, "*Промокод не найден. ❌*", parse_mode="Markdown")
+    except Exception as e:
+        logging.error(f"Error in handle_promo_code: {str(e)}")
+        await bot.send_message(chat_id, "*❌ Произошла ошибка при обработке промокода. Попробуйте позже.*", parse_mode="Markdown")
+
 
 async def create_promo_codes(promo_name: str, quantity: int, visible: str, prize: str, user_id: int):
     promo_code = generate_promo_code()
