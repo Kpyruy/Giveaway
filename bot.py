@@ -413,22 +413,22 @@ async def promo_members(chat_id, promo, current_page):
     # Сохранение ID сообщения в глобальную переменную
     promo_message_id.append(reply.message_id)
 
-async def handle_promo_code(promo_code: str, user_id: int):
+async def handle_promo_code(promo_code: str, user_id: int, chat_id: int):
     promo = await promo_collection.find_one({"_id": promo_code})
 
     if promo:
         active_members = promo.get("active_members", [])
 
         if user_id in active_members:
-            await bot.send_message(user_id, "*❌ Вы уже активировали данный промокод.*", parse_mode="Markdown")
+            await bot.send_message(chat_id, "*❌ Вы уже активировали данный промокод.*", parse_mode="Markdown")
         else:
             uses = promo.get("uses", 0)
             if uses > 0:
-                await activate_promo_code(promo_code, user_id)
+                await activate_promo_code(promo_code, user_id, chat_id)
             else:
-                await bot.send_message(user_id, "*❌ Промокод больше не действителен.*", parse_mode="Markdown")
+                await bot.send_message(chat_id, "*❌ Промокод больше не действителен.*", parse_mode="Markdown")
     else:
-        await bot.send_message(user_id, "*Промокод не найден. ❌*", parse_mode="Markdown")
+        await bot.send_message(chat_id, "*Промокод не найден. ❌*", parse_mode="Markdown")
 
 async def create_promo_codes(promo_name: str, quantity: int, visible: str, prize: str, user_id: int):
     promo_code = generate_promo_code()
@@ -514,7 +514,7 @@ async def get_active_promo_codes():
     else:
         return None
 
-async def activate_promo_code(promo_code: str, user_id: int):
+async def activate_promo_code(promo_code: str, user_id: int, chat_id: int):
     await promo_collection.update_one({"_id": promo_code}, {"$push": {"active_members": user_id}})
     await promo_collection.update_one({"_id": promo_code}, {"$inc": {"uses": -1}})
 
@@ -526,7 +526,7 @@ async def activate_promo_code(promo_code: str, user_id: int):
         await user_collections.update_one({"_id": user_id}, {"$inc": {"keys": 1}})
     else:
         pass
-    await bot.send_message(user_id, f"*Промокод* `{promo_code}` *активирован. ✅*", parse_mode="Markdown")
+    await bot.send_message(chat_id, f"*Промокод* `{promo_code}` *активирован. ✅*", parse_mode="Markdown")
 
 def generate_promo_code():
     promo_length = 8  # Длина промокода
@@ -2559,7 +2559,7 @@ async def process_promo_command(message: types.Message):
             if len(parts) == 1:
                 # Обработка команды /promo (сам промокод)
                 promo_code = args
-                await handle_promo_code(promo_code, message.from_user.id)
+                await handle_promo_code(promo_code, message.from_user.id, message.chat.id)
             if len(parts) == 2:
                 # Обработка команды /promo (название) (количество)
                 promo_name = parts[0]
