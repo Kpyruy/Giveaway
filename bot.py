@@ -2560,32 +2560,21 @@ async def process_promo_command(message: types.Message):
     if args:
         user_data = await user_collections.find_one({"_id": message.from_user.id})
         status = user_data.get("status")
-        if status == "Создатель 🎭" or status == "Админ 🚗":
-            if len(parts) == 1:
-                # Обработка команды /promo (сам промокод)
-                promo_code = args
-                await handle_promo_code(promo_code, message.from_user.id, chat_id)
-            elif len(parts) == 2:
-                # Обработка команды /promo (название) (количество)
-                promo_name = parts[0]
-                quantity = int(parts[1])
-                visible = "True"
-                prize = "None"
-                await create_promo_codes(promo_name, quantity, visible, prize, message.from_user.id)
-            elif len(parts) == 3:
-                # Обработка команды /promo (название) (количество) (видимость)
-                promo_name = parts[0]
-                quantity = int(parts[1])
-                visible = parts[2]
-                if visible == "False":
-                    visible = "False"
-                else:
+        if status:
+            if status == "Создатель 🎭" or status == "Админ 🚗":
+                if len(parts) == 1:
+                    # Обработка команды /promo (сам промокод)
+                    promo_code = args
+                    await handle_promo_code(promo_code, message.from_user.id, chat_id)
+                elif len(parts) == 2:
+                    # Обработка команды /promo (название) (количество)
+                    promo_name = parts[0]
+                    quantity = int(parts[1])
                     visible = "True"
-                prize = "None"
-                await create_promo_codes(promo_name, quantity, visible, prize, message.from_user.id)
-            if status == "Создатель 🎭":
-                if len(parts) == 4:
-                    # Обработка команды /promo (название) (количество) (видимость) (награда)
+                    prize = "None"
+                    await create_promo_codes(promo_name, quantity, visible, prize, message.from_user.id)
+                elif len(parts) == 3:
+                    # Обработка команды /promo (название) (количество) (видимость)
                     promo_name = parts[0]
                     quantity = int(parts[1])
                     visible = parts[2]
@@ -2593,15 +2582,30 @@ async def process_promo_command(message: types.Message):
                         visible = "False"
                     else:
                         visible = "True"
-                    prize = parts[3]
+                    prize = "None"
                     await create_promo_codes(promo_name, quantity, visible, prize, message.from_user.id)
+                if status == "Создатель 🎭":
+                    if len(parts) == 4:
+                        # Обработка команды /promo (название) (количество) (видимость) (награда)
+                        promo_name = parts[0]
+                        quantity = int(parts[1])
+                        visible = parts[2]
+                        if visible == "False":
+                            visible = "False"
+                        else:
+                            visible = "True"
+                        prize = parts[3]
+                        await create_promo_codes(promo_name, quantity, visible, prize, message.from_user.id)
+                else:
+                    pass
             else:
-                pass
+                if len(parts) == 1:
+                    # Обработка команды /promo (сам промокод)
+                    promo_code = args
+                    await handle_promo_code(promo_code, message.from_user.id, chat_id)
         else:
-            if len(parts) == 1:
-                # Обработка команды /promo (сам промокод)
-                promo_code = args
-                await handle_promo_code(promo_code, message.from_user.id, chat_id)
+            await message.reply(f"*❌ Вы не зарегестированы в боте!*\n"
+                                f"*🔰 Для регистрации напишите /start мне в личные сообщения.*", parse_mode="Markdown")
     else:
         active_promos = await get_active_promo_codes()
         if active_promos:
