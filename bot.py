@@ -2770,21 +2770,31 @@ async def start_contest_command(message: types.Message):
 async def send_event_to_all_users(message: types.Message):
     args = message.get_args()
 
-    if not args:
-        await message.reply("❔ Вы не указали сообщение которое хотите отправить!.", parse_mode="Markdown")
-        return
+    # Retrieve the user's status from the user_collections
+    profile_user_id = message.from_user.id
+    user_data = await user_collections.find_one({"_id": profile_user_id})
+    status = user_data.get("status")
+    print(status)
 
-    # Retrieve all user_ids from the user_collections
-    user_ids = [user['_id'] for user in await user_collections.find({}, {'_id': 1}).to_list(length=None)]
+    if status == "Создатель 🎭":
 
-    # Send the event message to all users
-    for user_id in user_ids:
-        try:
-            await bot.send_message(user_id, args, parse_mode="Markdown")
-        except Exception as e:
-            await message.reply(f"*🛑 Произошла ошибка, не получилось отправить сообщение пользователю* `{user_id}`: {e}", parse_mode="Markdown")
+        if not args:
+            await message.reply("*❔ Вы не указали сообщение, которое хотите отправить!*", parse_mode="Markdown")
+            return
 
-    await message.reply(f"*💠 Уведомлений было отправлено* `{len(user_ids)}`*.*", parse_mode="Markdown")
+        # Retrieve all user_ids from the user_collections
+        user_ids = [user['_id'] for user in await test_collection.find({}, {'_id': 1}).to_list(length=None)]
+
+        # Send the event message to all users
+        for user_id in user_ids:
+            try:
+                await bot.send_message(user_id, args, parse_mode="Markdown")
+            except Exception as e:
+                await message.reply(f"*🛑 Произошла ошибка, не получилось отправить сообщение пользователю* `{user_id}`: {e}", parse_mode="Markdown")
+
+        await message.reply(f"*💠 Уведомлений было отправлено* `{len(user_ids)}`*.*", parse_mode="Markdown")
+    else:
+        await message.reply("*⚠️ Нельзя воспользоваться командой, так как у вас недостаточно прав для этого.*", parse_mode="Markdown")
 
 # Обработчик команды для получения лог файла в канал
 @dp.message_handler(commands=['log'])
