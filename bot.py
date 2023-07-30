@@ -22,13 +22,14 @@ import logging
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.dispatcher.handler import CancelHandler, current_handler
 
-logging.basicConfig(
-    level=logging.DEBUG,  # Set the logging level to DEBUG to log everything
-    filename='private/bot.log',   # Log everything to a file named 'bot.log'
-    filemode='w',         # 'w' will overwrite the file each time the script runs, use 'a' to append instead
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# logging.basicConfig(
+#     level=logging.DEBUG,  # Set the logging level to DEBUG to log everything
+#     filename='private/bot.log',   # Log everything to a file named 'bot.log'
+#     filemode='w',         # 'w' will overwrite the file each time the script runs, use 'a' to append instead
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# )
 
+# Compass - 3GuIBMmZRoJlG3OE
 cluster = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://Admin:T8Lylcpso9jNs5Yw@cluster0.1t9opzs.mongodb.net/RandomBot?retryWrites=true&w=majority")
 user_collections = cluster.RandomBot.user
 key_collection = cluster.RandomBot.key
@@ -187,9 +188,9 @@ async def get_username(user_id):
 
     return username
 
-async def get_ban_username(user_id):
+async def get_ban_username(banned_user_id):
     # Use the get_chat method to get the user's information
-    user = await bot.get_chat(user_id)
+    user = await bot.get_chat(banned_user_id)
 
     # Access the username property of the User object
     username = user.username
@@ -375,6 +376,65 @@ async def show_user_history(callback_query, user_id, current_page):
                                             callback_query.message.message_id, parse_mode="Markdown", reply_markup=keyboard)
         profile_messages.append(reply.message_id)
 
+async def show_user_permanent(callback_query, user_id, current_page):
+    # Retrieve contests where the user with the specified user_id was a member
+    user_history = await user_collections.find({"_id": user_id}).to_list(length=None)
+
+    # Check if there are any results
+    if user_history:
+        user_data = user_history[0]  # Get the first dictionary from the list
+        banned_members = user_data.get("ban_members")
+
+        if banned_members:
+            # Your logic to display user history based on the current_page
+            per_page = 20
+            start_index = (current_page - 1) * per_page
+            end_index = current_page * per_page
+            page_history = banned_members[start_index:end_index] if start_index < len(banned_members) else []
+            all_pages = len(banned_members) // per_page
+
+            if len(banned_members) % per_page != 0:  # Check if there are any remaining items for an extra page
+                all_pages += 1
+
+            # Create the message containing the user history for the current page
+            result_message = f"<b>♾️ Черный список — Страница</b> <code>{current_page}</code> <b>из</b> <code>{all_pages}</code>:\n\n"
+            for idx, banned_member in enumerate(page_history, start=start_index + 1):
+                username = await get_ban_username(banned_member)
+                if username:
+                    username = username.replace("_", "&#95;")
+                result_message += f"{idx}. @{username} (<code>{banned_member}</code>)\n"
+            result_message += "\n<b>📛 Чтобы добавить/удалить пользователя</b> /permanent <code>{id}</code>"
+            # Create the inline keyboard with pagination buttons
+            keyboard = types.InlineKeyboardMarkup()
+            prev_button = types.InlineKeyboardButton(text='◀️ Предыдущая',
+                                                     callback_data=f'permanent_{user_id}_prev_{current_page}')
+            next_button = types.InlineKeyboardButton(text='Следущая ▶️',
+                                                     callback_data=f'permanent_{user_id}_next_{current_page}')
+
+            if current_page > 1 and end_index < all_pages:
+                keyboard.row(prev_button, next_button)
+            elif current_page > 1:
+                keyboard.row(prev_button)
+            elif current_page < all_pages:
+                keyboard.row(next_button)
+            back = types.InlineKeyboardButton(text='Выполнено ✅', callback_data='done')
+            keyboard.row(back)
+
+            # Send or edit the message with pagination
+            await bot.edit_message_text(result_message, callback_query.message.chat.id,
+                                                callback_query.message.message_id, parse_mode="HTML",
+                                                reply_markup=keyboard)
+    else:
+        result_message = "*Заблокированных пользователей нет. 🚫*"
+        keyboard = types.InlineKeyboardMarkup()
+        back = types.InlineKeyboardButton(text='Выполнено ✅', callback_data='done')
+        keyboard.row(back)
+
+        # Send or edit the message with pagination
+        await bot.edit_message_text(result_message, callback_query.message.chat.id,
+                                            callback_query.message.message_id, parse_mode="Markdown",
+                                            reply_markup=keyboard)
+
 async def promo_members(chat_id, promo, current_page):
     # Поиск конкурса по айди
     promo_code = await promo_collection.find_one({"_id": promo})
@@ -447,7 +507,6 @@ async def handle_promo_code(promo_code: str, user_id: int, chat_id):
     except Exception as e:
         logging.error(f"Error in handle_promo_code: {str(e)}")
         await bot.send_message(chat_id, "*❌ Произошла ошибка при обработке промокода. Попробуйте позже.*", parse_mode="Markdown")
-
 
 async def create_promo_codes(promo_name: str, quantity: int, visible: str, prize: str, user_id: int):
     promo_code = generate_promo_code()
@@ -2476,103 +2535,126 @@ async def start_contest_command(message: types.Message):
         profile_messages.append(reply.message_id)
 
 # # Перманнентная блокировака через команду
-# @dp.message_handler(commands=['permanent'])
-# async def process_search_command(message: types.Message, state: FSMContext):
-#     args = message.get_args()
-#
-#     global permanent_message_id
-#
-#     profile_user_id = message.from_user.id
-#     user_data = await user_collections.find_one({"_id": profile_user_id})
-#     ban_members = user_data.get("ban_members")
-#
-#     if not args and not message.reply_to_message:
-#         if ban_members:
-#             result_message = "<b>♾️ Черный список:</b>\n\n"
-#             for idx, banned_user_id in enumerate(ban_members, start=1):
-#                 username = await get_ban_username(banned_user_id)
-#                 if username:
-#                     username = username.replace("_", "&#95;")
-#                 result_message += f"{idx}. @{username} (<code>{banned_user_id}</code>)\n"
-#         else:
-#             result_message = "<b>Заблокированных пользователей нет. 🚫</b>\n"
-#
-#         result_message += "\n<b>📛 Чтобы добавить/удалить пользователя</b>\n" \
-#                           "/permanent <code>{id}</code>"
-#
-#         await bot.send_message(message.chat.id, result_message, parse_mode="HTML")
-#         return
-#
-#     if args:
-#         user_id = args
-#     elif message.reply_to_message:
-#         replied_user = message.reply_to_message.from_user
-#         user_id = replied_user.id
-#     else:
-#         user_id = profile_user_id
-#
-#     if isinstance(user_id, int):
-#         user_id = str(user_id)
-#
-#     try:
-#         user_id = int(user_id)
-#     except ValueError:
-#         await bot.send_message(message.chat.id, "*❌ Введенный айди пользователя должен быть числом.*", parse_mode="Markdown")
-#         return
-#
-#     if args and user_data and user_id == profile_user_id:
-#         await bot.send_message(message.chat.id, "*❌ Нельзя добавить самого себя в черный список.*", parse_mode="Markdown")
-#         return
-#
-#     # Проверка на существование пользователя
-#     try:
-#         await bot.get_chat_member(message.chat.id, user_id)
-#     except Exception:
-#         await bot.send_message(message.chat.id, "*❌ Такого пользователя не существует.*", parse_mode="Markdown")
-#         return
-#
-#     if not args:
-#         if ban_members:
-#             result_message = "<b>♾️ Черный список:</b>\n\n"
-#             for idx, banned_user_id in enumerate(ban_members, start=1):
-#                 username = await get_ban_username(banned_user_id)
-#                 if username:
-#                     username = username.replace("_", "&#95;")
-#                 result_message += f"{idx}. @{username} (<code>{banned_user_id}</code>)\n"
-#         else:
-#             result_message = "<b>Заблокированных пользователей нет. 🚫</b>\n"
-#
-#         result_message += "\n<b>📛 Чтобы добавить/удалить пользователя</b>\n" \
-#                           "/permanent <code>{id}</code>"
-#
-#         await bot.send_message(message.chat.id, result_message, parse_mode="HTML")
-#         return
-#
-#     if user_id in ban_members:
-#         await del_profile_ban_members(profile_user_id, user_id)
-#
-            # username = await get_username(user_id)
-            # if username:
-            #     username = username.replace("_", "&#95;")
-#
-#         profile = f'<b>🍁 Пользователь</b> @{username} (<code>{user_id}</code>) <b>был удален из черного списка вашего профиля!</b>\n\n' \
-#                   f'<b>♾️ Для просмотра всех заблокированных пользователей напишите /permanent</b>'
-#         await bot.send_message(message.chat.id, profile, parse_mode="HTML")
-#         await state.finish()
-#     else:
-#         await update_profile_ban_members(profile_user_id, user_id)
-#
-        # username = await get_username(user_id)
-        # if username:
-        #     username = username.replace("_", "&#95;")
-#
-#         profile = f'<b>🍁 Пользователь</b> @{username} (<code>{user_id}</code>) <b>был внесен в черный список вашего профиля!</b>\n\n' \
-#                   f'<b>♾️ Для просмотра всех заблокированных пользователей напишите /permanent</b>'
-#         await bot.send_message(message.chat.id, profile, parse_mode="HTML")
-#         await state.finish()
+@dp.message_handler(commands=['permanent'])
+async def process_search_command(message: types.Message, state: FSMContext):
+    args = message.get_args()
+
+    if message.chat.type != 'private':
+        await bot.send_message(message.chat.id, "*❌ Команда /contest доступна только в личных сообщениях.*", parse_mode="Markdown")
+        return
+
+    global permanent_message_id
+
+    profile_user_id = message.from_user.id
+    user_data = await user_collections.find_one({"_id": profile_user_id})  # Use profile_user_id instead of permanent_message_id
+    ban_members = user_data.get("ban_members")
+
+    if not args and not message.reply_to_message:
+        if ban_members:
+            # Your logic to display user history based on the current_page
+            per_page = 20
+            current_page = 1
+            start_index = (current_page - 1) * per_page
+            end_index = current_page * per_page
+            page_history = ban_members[start_index:end_index] if start_index < len(ban_members) else []
+            all_pages = len(ban_members) // per_page
+
+            if len(ban_members) % per_page != 0:  # Check if there are any remaining items for an extra page
+                all_pages += 1
+
+            # Create the message containing the user history for the current page
+            result_message = f"<b>♾️ Черный список — Страница</b> <code>{current_page}</code> <b>из</b> <code>{all_pages}</code>:\n\n"
+            for idx, banned_member in enumerate(page_history, start=start_index + 1):
+                username = await get_ban_username(banned_member)
+                if username:
+                    username = username.replace("_", "&#95;")
+                result_message += f"{idx}. @{username} (<code>{banned_member}</code>)\n"
+            result_message += "\n<b>📛 Чтобы добавить/удалить пользователя</b> /permanent <code>{id}</code>"
+            # Create the inline keyboard with pagination buttons
+            keyboard = types.InlineKeyboardMarkup()
+            prev_button = types.InlineKeyboardButton(text='◀️ Предыдущая',
+                                                     callback_data=f'permanent_{profile_user_id}_prev_{current_page}')
+            next_button = types.InlineKeyboardButton(text='Следущая ▶️',
+                                                     callback_data=f'permanent_{profile_user_id}_next_{current_page}')
+
+            if current_page > 1 and end_index < all_pages:
+                keyboard.row(prev_button, next_button)
+            elif current_page > 1:
+                keyboard.row(prev_button)
+            elif current_page < all_pages:
+                keyboard.row(next_button)
+
+        await bot.send_message(message.chat.id, result_message, parse_mode="HTML", reply_markup=keyboard)
+        return
+
+    if args:
+        user_id = args
+    elif message.reply_to_message:
+        replied_user = message.reply_to_message.from_user
+        user_id = replied_user.id
+    else:
+        user_id = profile_user_id
+
+    if isinstance(user_id, int):
+        user_id = str(user_id)
+
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        await bot.send_message(message.chat.id, "*❌ Введенный айди пользователя должен быть числом.*", parse_mode="Markdown")
+        return
+
+    if args and user_id == profile_user_id:  # Remove the redundant check for user_data
+        await bot.send_message(message.chat.id, "*❌ Нельзя добавить самого себя в черный список.*", parse_mode="Markdown")
+        return
+
+    # Проверка на существование пользователя
+    try:
+        await get_ban_username(user_id)
+    except Exception:
+        await bot.send_message(message.chat.id, "*❌ Такого пользователя не существует.*", parse_mode="Markdown")
+        return
+
+    if not args:
+        if ban_members:
+            result_message = "<b>♾️ Черный список:</b>\n\n"
+            for idx, banned_user_id in enumerate(ban_members, start=1):
+                username = await get_ban_username(banned_user_id)
+                if username:
+                    username = username.replace("_", "&#95;")
+                result_message += f"{idx}. @{username} (<code>{banned_user_id}</code>)\n"
+        else:
+            result_message = "<b>Заблокированных пользователей нет. 🚫</b>\n"
+
+        result_message += "\n<b>📛 Чтобы добавить/удалить пользователя</b>\n" \
+                          "/permanent <code>{id}</code>"
+
+        await bot.send_message(message.chat.id, result_message, parse_mode="HTML")
+        return
+
+    if user_id in ban_members:
+        await del_profile_ban_members(profile_user_id, user_id)
+
+        username = await get_username(user_id)
+        if username:
+            username = username.replace("_", "&#95;")
+
+        profile = f'<b>🍁 Пользователь</b> @{username} (<code>{user_id}</code>) <b>был удален из черного списка вашего профиля!</b>\n\n' \
+                  f'<b>♾️ Для просмотра всех заблокированных пользователей напишите /permanent</b>'
+        await bot.send_message(message.chat.id, profile, parse_mode="HTML")
+        await state.finish()
+    else:
+        await update_profile_ban_members(profile_user_id, user_id)
+
+        username = await get_username(user_id)
+        if username:
+            username = username.replace("_", "&#95;")
+
+        profile = f'<b>🍁 Пользователь</b> @{username} (<code>{user_id}</code>) <b>был внесен в черный список вашего профиля!</b>\n\n' \
+                  f'<b>♾️ Для просмотра всех заблокированных пользователей напишите /permanent</b>'
+        await bot.send_message(message.chat.id, profile, parse_mode="HTML")
 
 # Команда промокод
-
 @dp.message_handler(commands=['promo'])
 async def process_promo_command(message: types.Message):
     args = message.get_args()
@@ -2718,19 +2800,20 @@ async def get_user_profile(message: types.Message):
 
         # Create the message showing the user profile
         if username:
-            result_message = f"Профиль 📒\n" \
-                             f"👥 Тэг: @{username}\n"
+            result_message = f"<b>Профиль 📒</b>\n\n" \
+                             f"<b>👥 Тэг:</b> @{username}\n"
         else:
-            result_message = "Юзернейм отсутствует ❌\n\n"
+            result_message = "<b>Юзернейм отсутствует ❌</b>\n\n"
 
         # Add first name and last name if available
         if first_name:
-            result_message += f"🍭 Имя: {first_name}"
+            result_message += f"<b>🍭 Имя:</b> <code>{first_name}</code>"
         if last_name:
-            result_message += f" {last_name}"
+            result_message += f"<code>{last_name}</code>"
 
-        await message.reply(result_message)
+        await message.reply(result_message, parse_mode="HTML")
     except Exception as e:
+        print(e)
         await message.reply("Ошибка при получении профиля пользователя. Пожалуйста, убедитесь, что вы указали правильный айди.")
 
 # Кнопки
@@ -3693,6 +3776,26 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
 
         await bot.edit_message_text(result_message, callback_query.message.chat.id, message_id, parse_mode="HTML",
                                     reply_markup=keyboard)
+
+    elif button_text.startswith('permanent'):
+        user_id = callback_query.from_user.id
+
+        parts = button_text.split('_')
+        if user_id:
+            pass
+        else:
+            user_id = int(parts[1])
+        action = parts[2]
+        current_page = int(parts[3])
+
+        if action == 'prev':
+            current_page -= 1
+        elif action == 'next':
+            current_page += 1
+        else:
+            current_page = 1
+
+        await show_user_permanent(callback_query, user_id, current_page)
 
     elif button_text == 'buy_key':
         result_message = "*💲 Цена ключа на одну активацию* `1$`\n" \
