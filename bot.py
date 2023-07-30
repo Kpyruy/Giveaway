@@ -35,6 +35,7 @@ user_collections = cluster.RandomBot.user
 key_collection = cluster.RandomBot.key
 contests_collection = cluster.RandomBot.contests
 promo_collection = cluster.RandomBot.promo
+test_collection = cluster.RandomBot.test
 
 timezone = pytz.timezone('Europe/Kiev')
 current_time = datetime.now(timezone)
@@ -2764,6 +2765,26 @@ async def start_contest_command(message: types.Message):
     inline_keyboard.add(types.InlineKeyboardButton(text="Детальнее ❔", url="https://teletype.in/@kpyr/Flame"))
 
     await message.reply(profile, parse_mode="Markdown", reply_markup=inline_keyboard)
+
+@dp.message_handler(commands=['event'])
+async def send_event_to_all_users(message: types.Message):
+    args = message.get_args()
+
+    if not args:
+        await message.reply("❔ Вы не указали сообщение которое хотите отправить!.", parse_mode="Markdown")
+        return
+
+    # Retrieve all user_ids from the user_collections
+    user_ids = [user['_id'] for user in await user_collections.find({}, {'_id': 1}).to_list(length=None)]
+
+    # Send the event message to all users
+    for user_id in user_ids:
+        try:
+            await bot.send_message(user_id, args, parse_mode="Markdown")
+        except Exception as e:
+            await message.reply(f"*🛑 Произошла ошибка, не получилось отправить сообщение пользователю* `{user_id}`: {e}", parse_mode="Markdown")
+
+    await message.reply(f"*💠 Уведомлений было отправлено* `{len(user_ids)}`*.*", parse_mode="Markdown")
 
 # Обработчик команды для получения лог файла в канал
 @dp.message_handler(commands=['log'])
