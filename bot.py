@@ -2783,7 +2783,7 @@ async def send_event_to_all_users(message: types.Message):
             return
 
         # Retrieve all user_ids from the user_collections
-        user_ids = [user['_id'] for user in await test_collection.find({}, {'_id': 1}).to_list(length=None)]
+        user_ids = [user['_id'] for user in await user_collections.find({}, {'_id': 1}).to_list(length=None)]
 
         # Send the event message to all users
         for user_id in user_ids:
