@@ -22,12 +22,12 @@ import logging
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.dispatcher.handler import CancelHandler, current_handler
 
-# logging.basicConfig(
-#     level=logging.DEBUG,  # Set the logging level to DEBUG to log everything
-#     filename='private/bot.log',   # Log everything to a file named 'bot.log'
-#     filemode='w',         # 'w' will overwrite the file each time the script runs, use 'a' to append instead
-#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-# )
+logging.basicConfig(
+    level=logging.DEBUG,  # Set the logging level to DEBUG to log everything
+    filename='private/bot.log',   # Log everything to a file named 'bot.log'
+    filemode='w',         # 'w' will overwrite the file each time the script runs, use 'a' to append instead
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 # Compass - 3GuIBMmZRoJlG3OE
 cluster = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://Admin:T8Lylcpso9jNs5Yw@cluster0.1t9opzs.mongodb.net/RandomBot?retryWrites=true&w=majority")
