@@ -2774,7 +2774,6 @@ async def send_event_to_all_users(message: types.Message):
     profile_user_id = message.from_user.id
     user_data = await user_collections.find_one({"_id": profile_user_id})
     status = user_data.get("status")
-    print(status)
 
     if status == "Создатель 🎭":
 
