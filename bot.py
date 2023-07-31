@@ -2847,6 +2847,38 @@ async def get_user_profile(message: types.Message):
         print(e)
         await message.reply("Ошибка при получении профиля пользователя. Пожалуйста, убедитесь, что вы указали правильный айди.")
 
+@dp.message_handler(сommands=['leaderboard'])
+async def wins_leaderboard(message: types.Message, state: FSMContext):
+    # Retrieve the user's status from the user_collections
+    profile_user_id = message.from_user.id
+    user_data = await user_collections.find_one({"_id": profile_user_id})
+    user_wins = user_data.get("wins")
+
+    # Retrieve all users sorted by wins in descending order
+    top_users = await user_collections.find().sort("wins", -1).limit(15).to_list(length=None)
+
+    # Find the position of the calling user in the top_users list
+    calling_user_position = None
+    for idx, user in enumerate(top_users):
+        if user["_id"] == profile_user_id:
+            calling_user_position = idx + 1
+            break
+
+    # Prepare the leaderboard message
+    leaderboard_message = "*🏅 Таблица лидеров по победам (Топ 15):*\n\n"
+    for idx, user in enumerate(top_users):
+        username = await get_username(user['_id'])
+        if username:
+            username = username.replace("_", "&#95;")
+        leaderboard_message += f"*{idx + 1}. {username} —* `{user['wins']}` *побед*\n"
+
+    # Add the calling user's position
+    leaderboard_message += f"\n*👤 Ваша позиция:*\n" \
+                           f"*{calling_user_position}.* `{profile_user_id}` *—* `{user_wins}` *побед*"
+
+    # Send the leaderboard message
+    await message.answer(leaderboard_message, parse_mode="Markdown")
+
 # Кнопки
 @dp.callback_query_handler(lambda callback_query: True)
 async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
