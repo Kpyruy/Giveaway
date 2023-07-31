@@ -2858,7 +2858,7 @@ async def wins_leaderboard(message: types.Message, state: FSMContext):
     all_users = await user_collections.find().sort("wins", -1).to_list(length=None)
 
     # Filter out users with more wins than participations
-    top_users = [user for user in all_users if user.get("wins", 0) >= user.get("participation", 0)]
+    top_users = [user for user in all_users if user.get("wins", 0) <= user.get("participation", 0)]
 
     # Find the position of the calling user in the top_users list
     calling_user_position = None
