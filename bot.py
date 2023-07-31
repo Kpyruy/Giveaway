@@ -2884,10 +2884,10 @@ async def wins_leaderboard(message: types.Message, state: FSMContext):
     # Retrieve the user's status from the user_collections
     profile_user_id = message.from_user.id
     user_data = await user_collections.find_one({"_id": profile_user_id})
-    user_participations = user_data.get("participations")
+    user_participation = user_data.get("participation")
 
     # Retrieve all users sorted by wins in descending order
-    top_users = await user_collections.find().sort("participations", -1).limit(15).to_list(length=None)
+    top_users = await user_collections.find().sort("participation", -1).limit(15).to_list(length=None)
 
     # Find the position of the calling user in the top_users list
     calling_user_position = None
@@ -2902,11 +2902,11 @@ async def wins_leaderboard(message: types.Message, state: FSMContext):
         username = await get_username(user['_id'])
         if username:
             username = username.replace("_", "&#95;")
-        leaderboard_message += f"<b>{idx + 1}. {username} —</b> <code>{user['participations']}</code> <b>участий</b>\n"
+        leaderboard_message += f"<b>{idx + 1}. {username} —</b> <code>{user['participation']}</code> <b>участий</b>\n"
 
     # Add the calling user's position
     leaderboard_message += f"\n<b>👤 Ваша позиция:</b>\n" \
-                           f"<b>{calling_user_position}.</b> <code>{profile_user_id}</code> <b>—</b> <code>{user_participations}</code> <b>побед</b>"
+                           f"<b>{calling_user_position}.</b> <code>{profile_user_id}</code> <b>—</b> <code>{user_participation}</code> <b>побед</b>"
 
     # Send the leaderboard message
     await message.answer(leaderboard_message, parse_mode="HTML")
