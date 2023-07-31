@@ -331,19 +331,24 @@ async def show_user_history(callback_query, user_id, current_page):
             contest_id = contest.get("_id")
             contest_end_date = contest.get("end_date")
             contest_members = contest.get("members")
-            if contest_name == str(contest_id):
-                # Format the contest information as needed
-                result_message += f"                            *= {idx} =*\n" \
-                                  f"*🪁 Имя:* `{contest_name}`\n" \
-                                  f"*👤 Количество участников:* `{len(contest_members)}`\n" \
-                                  f"*🗓️ Дата окончания:* `{contest_end_date}`\n\n"
+            ended = contest.get("ended")
+
+            if ended == "True":
+                if contest_name == str(contest_id):
+                    # Format the contest information as needed
+                    result_message += f"                            *= {idx} =*\n" \
+                                      f"*🪁 Имя:* `{contest_name}`\n" \
+                                      f"*👤 Количество участников:* `{len(contest_members)}`\n" \
+                                      f"*🗓️ Дата окончания:* `{contest_end_date}`\n\n"
+                else:
+                    # Format the contest information as needed
+                    result_message += f"                            *= {idx} =*\n" \
+                                      f"*🪁 Имя:* `{contest_name}`\n" \
+                                      f"*🧊 Идентификатор:* `{contest_id}`\n" \
+                                      f"*👤 Количество участников:* `{len(contest_members)}`\n" \
+                                      f"*🗓️ Дата окончания:* `{contest_end_date}`\n\n"
             else:
-                # Format the contest information as needed
-                result_message += f"                            *= {idx} =*\n" \
-                                  f"*🪁 Имя:* `{contest_name}`\n" \
-                                  f"*🧊 Идентификатор:* `{contest_id}`\n" \
-                                  f"*👤 Количество участников:* `{len(contest_members)}`\n" \
-                                  f"*🗓️ Дата окончания:* `{contest_end_date}`\n\n"
+                continue
 
         # Calculate the total number of pages
         total_pages = (len(user_history) + per_page - 1) // per_page
@@ -460,6 +465,8 @@ async def promo_members(chat_id, promo, current_page):
     # Кнопки перелистывания
     prev_button = types.InlineKeyboardButton(text='◀️ Назад', callback_data=f'promo_{promo}_prev_{current_page}')
     next_button = types.InlineKeyboardButton(text='Вперед ▶️', callback_data=f'promo_{promo}_next_{current_page}')
+    promo_list_update = types.InlineKeyboardButton(text='Обновить 🌀',
+                                                   callback_data=f'list_update_{promo}_{current_page}')
     back = types.InlineKeyboardButton(text='Выполенено ✅', callback_data='done')
 
     # Add both buttons if there are both previous and next pages
@@ -471,6 +478,7 @@ async def promo_members(chat_id, promo, current_page):
     # Add only the next button if this is the first page
     elif end_index < len(members):
         keyboard.row(next_button)
+    keyboard.row(promo_list_update)
     keyboard.row(back)
     uses = promo_code.get("uses")
     result_message += f"\n\n<b>🧪 Осталось активаций:</b> <code>{uses}</code>"
@@ -481,6 +489,53 @@ async def promo_members(chat_id, promo, current_page):
 
     # Сохранение ID сообщения в глобальную переменную
     promo_message_id.append(reply.message_id)
+
+async def update_promo_members(promo, current_page, chat_id, message_id):
+    # Поиск конкурса по айди
+    promo_code = await promo_collection.find_one({"_id": promo})
+
+    members = promo_code.get("active_members")
+    result_message = f"<b>📋 Список пользователей для промокода</b> <code>{promo}</code>:\n\n" \
+                     f"                                   <b>Страница {current_page}</b>\n\n"
+
+    keyboard = types.InlineKeyboardMarkup()
+
+    # Количество участников на одной странице
+    per_page = 25
+    start_index = (current_page - 1) * per_page
+    end_index = current_page * per_page
+    page_members = members[start_index:end_index] if start_index < len(members) else []
+    for idx, user_id in enumerate(page_members, start=start_index + 1):
+        username = await get_username(user_id)
+        if username:
+            username = username.replace("_", "&#95;")
+        result_message += f"<b>{idx}.</b> @{username} <b>(</b><code>{user_id}</code><b>)</b>\n"
+
+    # Кнопки перелистывания
+    prev_button = types.InlineKeyboardButton(text='◀️ Назад', callback_data=f'promo_{promo}_prev_{current_page}')
+    next_button = types.InlineKeyboardButton(text='Вперед ▶️', callback_data=f'promo_{promo}_next_{current_page}')
+    promo_list_update = types.InlineKeyboardButton(text='Обновить 🌀',
+                                                   callback_data=f'list_update_{promo}_{current_page}')
+    back = types.InlineKeyboardButton(text='Выполенено ✅', callback_data='done')
+
+    # Add both buttons if there are both previous and next pages
+    if current_page > 1 and end_index < len(members):
+        keyboard.row(prev_button, next_button)
+    # Add only the previous button if there are no more pages
+    elif current_page > 1:
+        keyboard.row(prev_button)
+    # Add only the next button if this is the first page
+    elif end_index < len(members):
+        keyboard.row(next_button)
+    keyboard.row(promo_list_update)
+    keyboard.row(back)
+    uses = promo_code.get("uses")
+    result_message += f"\n\n<b>🧪 Осталось активаций:</b> <code>{uses}</code>"
+    # Send the formatted message with the keyboard
+    # Send or edit the message with pagination
+    await bot.edit_message_text(result_message, chat_id,
+                                message_id, parse_mode="HTML",
+                                reply_markup=keyboard)
 
 # Add this at the beginning of your script to enable logging
 logging.basicConfig(level=logging.INFO)
@@ -618,6 +673,149 @@ def generate_promo_code():
     promo_length = 8  # Длина промокода
     allowed_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     return ''.join(random.choices(allowed_characters, k=promo_length))
+
+async def send_profile(username, user_id, chat_id):
+    # Поиск данных о пользователе в базе данных
+    user_data = await user_collections.find_one({"_id": user_id})
+
+    wins = user_data.get("wins", 0)
+    participation = user_data.get("participation", 0)
+
+    # Вычисление процента побед
+    win_percentage = (wins / participation) * 100 if participation > 0 else 0
+    creation_date = user_data.get("creation_date", "")
+    status = user_data.get("status", "")
+
+    # Создание и отправка сообщения с кнопками
+    profile = f'*🍹 Профиль пользователя* `{username}`:\n\n' \
+              f'*🍧 Статус:* `{status}`\n\n' \
+              f'*🍀 Участие в конкурсах:* `{participation}`\n' \
+              f'*🏅 Победы в конкурсах:* `{wins}`\n' \
+              f'*🏆 Процент побед:* `{win_percentage:.2f}%`\n\n' \
+              f'*📅 Дата регистрации:* `{creation_date}`'
+    keyboard = types.InlineKeyboardMarkup()
+    history = types.InlineKeyboardButton(text='История участий 📔', callback_data=f'history_{user_id}_None_1')
+    active_history_drawings = types.InlineKeyboardButton(text='Активные участия 🦪', callback_data=f'active_{user_id}_None_1')
+    id_check = types.InlineKeyboardButton(text='Поиск пользователя 🥏', callback_data='id_check')
+    done = types.InlineKeyboardButton(text='Готово ✅', callback_data='done')
+    keyboard.add(history, active_history_drawings)
+    keyboard.add(id_check)
+    keyboard.add(done)
+
+    await bot.send_message(chat_id, text=profile, parse_mode="Markdown",
+                                   reply_markup=keyboard)
+
+async def show_profile(username, user_id, chat_id, message_id):
+    # Поиск данных о пользователе в базе данных
+    user_data = await user_collections.find_one({"_id": user_id})
+
+    wins = user_data.get("wins", 0)
+    participation = user_data.get("participation", 0)
+
+    # Вычисление процента побед
+    win_percentage = (wins / participation) * 100 if participation > 0 else 0
+    creation_date = user_data.get("creation_date", "")
+    status = user_data.get("status", "")
+
+    # Создание и отправка сообщения с кнопками
+    profile = f'*🍹 Профиль пользователя* `{username}`:\n\n' \
+              f'*🍧 Статус:* `{status}`\n\n' \
+              f'*🍀 Участие в конкурсах:* `{participation}`\n' \
+              f'*🏅 Победы в конкурсах:* `{wins}`\n' \
+              f'*🏆 Процент побед:* `{win_percentage:.2f}%`\n\n' \
+              f'*📅 Дата регистрации:* `{creation_date}`'
+    keyboard = types.InlineKeyboardMarkup()
+    history = types.InlineKeyboardButton(text='История участий 📔', callback_data=f'history_{user_id}_None_1')
+    active_history_drawings = types.InlineKeyboardButton(text='Активные участия 🦪', callback_data=f'active_{user_id}_None_1')
+    id_check = types.InlineKeyboardButton(text='Поиск пользователя 🥏', callback_data='id_check')
+    done = types.InlineKeyboardButton(text='Готово ✅', callback_data='done')
+    keyboard.add(history, active_history_drawings)
+    keyboard.add(id_check)
+    keyboard.add(done)
+
+    # Send or edit the message with pagination
+    reply = await bot.edit_message_text(profile, chat_id,
+                                message_id, parse_mode="Markdown",
+                                reply_markup=keyboard)
+    # Сохранение ID сообщения в глобальную переменную
+    profile_messages.append(reply.message_id)
+
+async def show_user_drawings(callback_query, user_id, current_page):
+    # Retrieve contests where the user with the specified user_id was a member
+    user_history = await contests_collection.find({"members": user_id}).to_list(length=None)
+
+    # Check if there are any active contests for the user
+    active_contests_exist = any(contest.get("ended", "True") == "False" for contest in user_history)
+
+    if user_history and active_contests_exist:
+        # Your logic to display user history based on the current_page
+        per_page = 3
+        start_index = (current_page - 1) * per_page
+        end_index = current_page * per_page
+        page_history = user_history[start_index:end_index] if start_index < len(user_history) else []
+        all_pages = len(user_history) // per_page
+
+        if all_pages == 0:
+            all_pages = 1
+        else:
+            pass
+        # Create the message containing the user history for the current page
+        result_message = f"*🦪 Участие в конкурсах - Страница* `{current_page}` из `{all_pages}`:\n\n"
+        for idx, contest in enumerate(page_history, start=start_index + 1):
+            # Extract relevant information about the contest, e.g., its title, end date, etc.
+            contest_name = contest.get("contest_name")
+            contest_id = contest.get("_id")
+            contest_end_date = contest.get("end_date")
+            contest_members = contest.get("members")
+            ended = contest.get("ended")
+            if ended == "True":
+                pass
+            else:
+                if contest_name == str(contest_id):
+                    # Format the contest information as needed
+                    result_message += f"                            *= {idx} =*\n" \
+                                      f"*🪁 Имя:* `{contest_name}`\n" \
+                                      f"*👤 Количество участников:* `{len(contest_members)}`\n" \
+                                      f"*🗓️ Дата окончания:* `{contest_end_date}`\n\n"
+                else:
+                    # Format the contest information as needed
+                    result_message += f"                            *= {idx} =*\n" \
+                                      f"*🪁 Имя:* `{contest_name}`\n" \
+                                      f"*🧊 Идентификатор:* `{contest_id}`\n" \
+                                      f"*👤 Количество участников:* `{len(contest_members)}`\n" \
+                                      f"*🗓️ Дата окончания:* `{contest_end_date}`\n\n"
+
+        # Calculate the total number of pages
+        total_pages = (len(user_history) + per_page - 1) // per_page
+
+        # Create the inline keyboard with pagination buttons
+        keyboard = types.InlineKeyboardMarkup()
+        prev_button = types.InlineKeyboardButton(text='◀️ Предыдущая', callback_data=f'active_{user_id}_prev_{current_page}')
+        next_button = types.InlineKeyboardButton(text='Следущая ▶️', callback_data=f'active_{user_id}_next_{current_page}')
+
+        if current_page > 1 and end_index < total_pages:
+            keyboard.row(prev_button, next_button)
+        elif current_page > 1:
+            keyboard.row(prev_button)
+        elif current_page < total_pages:
+            keyboard.row(next_button)
+        back = types.InlineKeyboardButton(text='Назад 🥏', callback_data='profile_edit')
+        keyboard.row(back)
+
+        # Send or edit the message with pagination
+        reply = await bot.edit_message_text(result_message, callback_query.message.chat.id,
+                                            callback_query.message.message_id, parse_mode="Markdown", reply_markup=keyboard)
+        profile_messages.append(reply.message_id)
+    else:
+        result_message = "*🦪 Сейчас вы не участвуете в каких-либо конкурсах.*"
+        keyboard = types.InlineKeyboardMarkup()
+        back = types.InlineKeyboardButton(text='Назад 🥏', callback_data='profile_edit')
+        keyboard.row(back)
+
+        # Send or edit the message with pagination
+        reply = await bot.edit_message_text(result_message, callback_query.message.chat.id,
+                                            callback_query.message.message_id, parse_mode="Markdown", reply_markup=keyboard)
+        profile_messages.append(reply.message_id)
 
 # Объявление глобальных переменных
 contest_name = None
@@ -1484,40 +1682,25 @@ async def decline_search_callback(callback_query: types.CallbackQuery, state: FS
 
     if user_data:
         username = callback_query.from_user.username
-        wins = user_data.get("wins", 0)
-        participation = user_data.get("participation", 0)
-        creation_date = user_data.get("creation_date", "")
-        status = user_data.get("status", "")
 
-        # Создание и отправка сообщения с кнопками
-        profile = f'*🍹 Профиль пользователя* `{username}`:\n\n*🍧 Статус:* `{status}`\n\n*🏅 Победы в конкурсах:* `{wins}`\n*🍀 Участие в конкурсах:* `{participation}`\n*📅 Дата регистрации:* `{creation_date}`'
-        keyboard = types.InlineKeyboardMarkup()
-        history = types.InlineKeyboardButton(text='История участий 📔', callback_data='history')
-        id_check = types.InlineKeyboardButton(text='Поиск пользователя 🥏', callback_data='id_check')
-        done = types.InlineKeyboardButton(text='Готово ✅', callback_data='done')
-        keyboard.add(history, id_check)
-        keyboard.add(done)
-
-        reply = await bot.edit_message_text(profile, callback_query.message.chat.id,
-                                            callback_query.message.message_id, parse_mode="Markdown",
-                                            reply_markup=keyboard)
+        await show_profile(username, user_id, callback_query.message.chat.id, callback_query.message.message_id)
     else:
         # Обработка случая, когда данные о пользователе не найдены
         reply = await message.reply("☠️ Профиль пользователя не найден.")
-    # Сохранение ID сообщения в глобальную переменную
-    profile_messages.append(reply.message_id)
+        # Сохранение ID сообщения в глобальную переменную
+        profile_messages.append(reply.message_id)
 
 @dp.message_handler(state=MenuCategories.id_check)
 async def process_search(message: types.Message, state: FSMContext):
     await bot.delete_message(message.chat.id, message.message_id)
-
+    username = message.from_user.username
     if not message.text.isdigit():
         int_digit = await bot.send_message(message.chat.id, "*❌ Введите пожалуйста целочисленный идентификатор пользователя.*", parse_mode="Markdown")
         await asyncio.sleep(3)
         await bot.delete_message(chat_id=message.chat.id, message_id=int_digit.message_id)
         return
 
-    global profile_messages
+    prev_message_id = (await state.get_data()).get('prev_message_id')
 
     user_id = int(message.text)
 
@@ -1528,23 +1711,33 @@ async def process_search(message: types.Message, state: FSMContext):
     result = await bot.send_message(message.chat.id, "*🏯 Результаты поиска пользователя...*", parse_mode="Markdown")
     await asyncio.sleep(2)
     await bot.delete_message(chat_id=message.chat.id, message_id=result.message_id)
-    message_id = profile_messages[-1]
+
 
     if user:
-        wins = user.get("wins", 0)
-        participation = user.get("participation", 0)
-        creation_date = user.get("creation_date", "")
-        status = user.get("status", "")
+        user_data = await user_collections.find_one({"_id": user_id})
+
+        wins = user_data.get("wins", 0)
+        participation = user_data.get("participation", 0)
+
+        # Вычисление процента побед
+        win_percentage = (wins / participation) * 100 if participation > 0 else 0
+        creation_date = user_data.get("creation_date", "")
+        status = user_data.get("status", "")
 
         # Создание и отправка сообщения с кнопками
-        profile = f'*🍹 Профиль пользователя* `{user_id}`:\n\n*🍧 Статус:* `{status}`\n\n*🏅 Победы в конкурсах:* `{wins}`\n*🍀 Участие в конкурсах:* `{participation}`\n*📅 Дата регистрации:* `{creation_date}`'
+        profile = f'*🍹 Профиль пользователя* `{username}`:\n\n' \
+                  f'*🍧 Статус:* `{status}`\n\n' \
+                  f'*🍀 Участие в конкурсах:* `{participation}`\n' \
+                  f'*🏅 Победы в конкурсах:* `{wins}`\n' \
+                  f'*🏆 Процент побед:* `{win_percentage:.2f}%`\n\n' \
+                  f'*📅 Дата регистрации:* `{creation_date}`'
         keyboard = types.InlineKeyboardMarkup()
         id_check = types.InlineKeyboardButton(text='Поиск пользователя 🥏', callback_data='id_check')
-        done = types.InlineKeyboardButton(text='Готово ✅', callback_data='done')
+        back = types.InlineKeyboardButton(text='Назад 🧿', callback_data='profile_edit')
         keyboard.add(id_check)
-        keyboard.add(done)
+        keyboard.add(back)
 
-        reply = await bot.edit_message_text(profile, message.chat.id, message_id, parse_mode="Markdown",
+        reply = await bot.edit_message_text(profile, message.chat.id, prev_message_id, parse_mode="Markdown",
                                     reply_markup=keyboard)
         await state.finish()
 
@@ -1562,8 +1755,9 @@ async def search_callback(callback_query: types.CallbackQuery, state: FSMContext
     input_id = types.InlineKeyboardButton(text='Отмена ❌', callback_data='decline_id_check')
     keyboard.row(input_id)
 
-    await bot.edit_message_text(search_text, callback_query.message.chat.id, callback_query.message.message_id,
+    reply = await bot.edit_message_text(search_text, callback_query.message.chat.id, callback_query.message.message_id,
                                 parse_mode="Markdown", reply_markup=keyboard)
+
     await MenuCategories.id_check.set()
     await state.update_data(prev_message_id=callback_query.message.message_id)
 
@@ -2447,10 +2641,26 @@ async def process_search_command(message: types.Message, state: FSMContext):
     if user_data:
         wins = user_data.get("wins", 0)
         participation = user_data.get("participation", 0)
+
+        # Вычисление процента побед
+        win_percentage = (wins / participation) * 100 if participation > 0 else 0
         creation_date = user_data.get("creation_date", "")
         status = user_data.get("status", "")
 
-        profile = f'*🍹 Профиль пользователя* `{user_id}`:\n\n*🍧 Статус:* `{status}`\n\n*🏅 Победы в конкурсах:* `{wins}`\n*🍀 Участие в конкурсах:* `{participation}`\n*📅 Дата регистрации:* `{creation_date}`'
+        # Создание и отправка сообщения с кнопками
+        profile = f'*🍹 Профиль пользователя* `{user_id}`:\n\n' \
+                  f'*🍧 Статус:* `{status}`\n\n' \
+                  f'*🍀 Участие в конкурсах:* `{participation}`\n' \
+                  f'*🏅 Победы в конкурсах:* `{wins}`\n' \
+                  f'*🏆 Процент побед:* `{win_percentage:.2f}%`\n\n' \
+                  f'*📅 Дата регистрации:* `{creation_date}`'
+        keyboard = types.InlineKeyboardMarkup()
+        history = types.InlineKeyboardButton(text='История участий 📔', callback_data=f'history_{user_id}_None_1')
+        id_check = types.InlineKeyboardButton(text='Поиск пользователя 🥏', callback_data='id_check')
+        done = types.InlineKeyboardButton(text='Готово ✅', callback_data='done')
+        keyboard.add(history, id_check)
+        keyboard.add(done)
+
         await bot.send_chat_action(user_id, action="typing")
         await asyncio.sleep(0.5)
         await bot.send_message(message.chat.id, profile, parse_mode="Markdown")
@@ -2516,22 +2726,34 @@ async def start_contest_command(message: types.Message):
 
         # Поиск данных о пользователе в базе данных
         user_data = await user_collections.find_one({"_id": user_id})
-
         if user_data:
-            username = message.from_user.username  # Получение имени пользователя
+            username = message.from_user.username
             wins = user_data.get("wins", 0)
             participation = user_data.get("participation", 0)
+
+            # Вычисление процента побед
+            win_percentage = (wins / participation) * 100 if participation > 0 else 0
             creation_date = user_data.get("creation_date", "")
             status = user_data.get("status", "")
 
             # Создание и отправка сообщения с кнопками
-            profile = f'*🍹 Профиль пользователя* `{username}`:\n\n*🍧 Статус:* `{status}`\n\n*🏅 Победы в конкурсах:* `{wins}`\n*🍀 Участие в конкурсах:* `{participation}`\n*📅 Дата регистрации:* `{creation_date}`'
-            await bot.send_chat_action(user_id, action="typing")
-            await asyncio.sleep(0.5)
+            profile = f'*🍹 Профиль пользователя* `{username}`:\n\n' \
+                      f'*🍧 Статус:* `{status}`\n\n' \
+                      f'*🍀 Участие в конкурсах:* `{participation}`\n' \
+                      f'*🏅 Победы в конкурсах:* `{wins}`\n' \
+                      f'*🏆 Процент побед:* `{win_percentage:.2f}%`\n\n' \
+                      f'*📅 Дата регистрации:* `{creation_date}`'
+            keyboard = types.InlineKeyboardMarkup()
+            history = types.InlineKeyboardButton(text='История участий 📔', callback_data=f'history_{user_id}_None_1')
+            id_check = types.InlineKeyboardButton(text='Поиск пользователя 🥏', callback_data='id_check')
+            done = types.InlineKeyboardButton(text='Готово ✅', callback_data='done')
+            keyboard.add(history, id_check)
+            keyboard.add(done)
+
             reply = await message.reply(profile, parse_mode="Markdown")
         else:
-            # Обработка случая, когда данные о пользователе не найдены
             reply = await message.reply("☠️ Профиль пользователя не найден.")
+
         # Сохранение ID сообщения в глобальную переменную
         profile_messages.append(reply.message_id)
 
@@ -2541,7 +2763,7 @@ async def process_search_command(message: types.Message, state: FSMContext):
     args = message.get_args()
 
     if message.chat.type != 'private':
-        await bot.send_message(message.chat.id, "*❌ Команда /contest доступна только в личных сообщениях.*", parse_mode="Markdown")
+        await bot.send_message(message.chat.id, "*❌ Команда /permanent доступна только в личных сообщениях.*", parse_mode="Markdown")
         return
 
     global permanent_message_id
@@ -2737,8 +2959,17 @@ async def process_promo_list_command(message: types.Message):
                 if active_members:
                     await promo_members(message.chat.id, promo_id, current_page)
                 else:
-                    await message.reply(f"*📋 Промокод* `{promo_id}` *не был активирован ни одним пользователем.*",
-                                        parse_mode="Markdown")
+                    # Создаем кнопку с коллбэк-данными, включающими айди сообщения
+                    keyboard = types.InlineKeyboardMarkup()
+                    promo_list_update = types.InlineKeyboardButton(text='Обновить 🌀',
+                                                                   callback_data=f'list_update_{promo_id}_{current_page}')
+                    keyboard.row(promo_list_update)
+
+                    # Отправляем сообщение и сохраняем его айди
+                    await message.reply(
+                        f"*📋 Промокод* `{promo_id}` *не был активирован ни одним пользователем.*",
+                        parse_mode="Markdown", reply_markup=keyboard)
+
             else:
                 await message.reply("*❌ Промокод не найден.*", parse_mode="Markdown")
         else:
@@ -2983,28 +3214,11 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
 
         if user_data:
             username = callback_query.from_user.username
-            wins = user_data.get("wins", 0)
-            participation = user_data.get("participation", 0)
-            creation_date = user_data.get("creation_date", "")
-            status = user_data.get("status", "")
 
-            # Создание и отправка сообщения с кнопками
-            profile = f'*🍹 Профиль пользователя* `{username}`:\n\n*🍧 Статус:* `{status}`\n\n*🏅 Победы в конкурсах:* `{wins}`\n*🍀 Участие в конкурсах:* `{participation}`\n*📅 Дата регистрации:* `{creation_date}`'
-            keyboard = types.InlineKeyboardMarkup()
-            history = types.InlineKeyboardButton(text='История участий 📔', callback_data=f'history_{user_id}_None_1')
-            id_check = types.InlineKeyboardButton(text='Поиск пользователя 🥏', callback_data='id_check')
-            done = types.InlineKeyboardButton(text='Готово ✅', callback_data='done')
-            keyboard.add(history, id_check)
-            keyboard.add(done)
-
-            reply = await bot.send_message(callback_query.message.chat.id, text=profile, parse_mode="Markdown",
-                                           reply_markup=keyboard)
+            await send_profile(username, user_id, callback_query.message.chat.id)
         else:
             # Обработка случая, когда данные о пользователе не найдены
-            reply = await bot.send_message(callback_query.message.chat.id, "☠️ Профиль пользователя не найден.")
-
-        # Сохранение ID сообщения в глобальную переменную
-        profile_messages.append(reply.message_id)
+            await bot.send_message(callback_query.message.chat.id, "☠️ Профиль пользователя не найден.")
 
     elif button_text == 'profile_edit':
 
@@ -3013,23 +3227,15 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         # Поиск данных о пользователе в базе данных
         user_data = await user_collections.find_one({"_id": user_id})
 
-        username = callback_query.from_user.username
-        wins = user_data.get("wins", 0)
-        participation = user_data.get("participation", 0)
-        creation_date = user_data.get("creation_date", "")
-        status = user_data.get("status", "")
+        if user_data:
+            username = callback_query.from_user.username
 
-        # Создание и отправка сообщения с кнопками
-        profile = f'*🍹 Профиль пользователя* `{username}`:\n\n*🍧 Статус:* `{status}`\n\n*🏅 Победы в конкурсах:* `{wins}`\n*🍀 Участие в конкурсах:* `{participation}`\n*📅 Дата регистрации:* `{creation_date}`'
-        keyboard = types.InlineKeyboardMarkup()
-        history = types.InlineKeyboardButton(text='История участий 📔', callback_data=f'history_{user_id}_None_1')
-        id_check = types.InlineKeyboardButton(text='Поиск пользователя 🥏', callback_data='id_check')
-        done = types.InlineKeyboardButton(text='Готово ✅', callback_data='done')
-        keyboard.add(history, id_check)
-        keyboard.add(done)
+            await show_profile(username, user_id, callback_query.message.chat.id, callback_query.message.message_id)
+        else:
+            profile = "☠️ Профиль пользователя не найден."
 
-        # Send or edit the message with pagination
-        await bot.edit_message_text(profile, callback_query.message.chat.id,
+            # Send or edit the message with pagination
+            await bot.edit_message_text(profile, callback_query.message.chat.id,
                                                 callback_query.message.message_id, parse_mode="Markdown",
                                                 reply_markup=keyboard)
 
@@ -3203,6 +3409,26 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             current_page = 1
 
         await show_user_history(callback_query, user_id, current_page)
+
+    elif button_text.startswith('active'):
+        user_id = callback_query.from_user.id
+
+        parts = button_text.split('_')
+        if user_id:
+            pass
+        else:
+            user_id = int(parts[1])
+        action = parts[2]
+        current_page = int(parts[3])
+
+        if action == 'prev':
+            current_page -= 1
+        elif action == 'next':
+            current_page += 1
+        else:
+            current_page = 1
+
+        await show_user_drawings(callback_query, user_id, current_page)
 
     elif button_text == 'back_history':
 
@@ -3826,7 +4052,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         promo = str(parts[1])
         action = parts[2]
         current_page = int(parts[3])
-        message_id = promo_message_id[-1]
+        message_id = callback_query.message.message_id
 
         if action == 'prev':
             current_page -= 1
@@ -3874,6 +4100,16 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
 
         await bot.edit_message_text(result_message, callback_query.message.chat.id, message_id, parse_mode="HTML",
                                     reply_markup=keyboard)
+
+    elif button_text.startswith('list_update'):
+
+        parts = button_text.split('_')
+        promo = parts[2]
+        current_page = int(parts[3])
+        try:
+            await update_promo_members(promo, current_page, callback_query.message.chat.id, callback_query.message.message_id)
+        except Exception as e:
+            await bot.answer_callback_query(callback_query.id, text="Новых участников не появилось, пожалуйста перестаньте ломать палец. 🥬")
 
     elif button_text.startswith('permanent'):
         user_id = callback_query.from_user.id
@@ -4138,6 +4374,26 @@ async def update_statuses():
         # Подождать 1 секунду перед следующей проверкой и обновлением статусов
         await asyncio.sleep(1)
 
+async def update_promo():
+    while True:
+        # Получение всех пользователей
+        promo_codes = await promo_collection.find().to_list(length=None)
+
+        for promo in promo_codes:
+            promo_code = promo.get("_id")
+            uses = promo.get("uses")
+
+            visible = promo.get("visible")
+            if visible in ["False"]:
+                continue  # Пропустить пользователя с этим статусом
+
+            if uses == 0:
+                visible = "False"
+                await promo_collection.update_one({"_id": promo_code}, {"$set": {"visible": visible}})
+
+        # Подождать 1 секунду перед следующей проверкой и обновлением статусов
+        await asyncio.sleep(1)
+
 async def main():
     # Start the bot
     await dp.start_polling()
@@ -4149,11 +4405,14 @@ contest_draw_task = contest_draw_loop.create_task(check_and_perform_contest_draw
 # Создание и запуск асинхронного цикла для функции обновления статусов пользователей
 update_statuses_task = asyncio.get_event_loop().create_task(update_statuses())
 
+# Создание и запуск асинхронного цикла для функции обновления статусов пользователей
+update_promo_task = asyncio.get_event_loop().create_task(update_promo())
+
 # Запуск основного асинхронного цикла для работы бота
 bot_loop = asyncio.get_event_loop()
 bot_task = bot_loop.create_task(main())
 
 # Запуск всех задач
 loop = asyncio.get_event_loop()
-tasks = asyncio.gather(contest_draw_task, bot_task, update_statuses_task)
+tasks = asyncio.gather(contest_draw_task, bot_task, update_statuses_task, update_promo_task)
 loop.run_until_complete(tasks)
