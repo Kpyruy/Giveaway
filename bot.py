@@ -2865,19 +2865,19 @@ async def wins_leaderboard(message: types.Message, state: FSMContext):
             break
 
     # Prepare the leaderboard message
-    leaderboard_message = "*🏅 Таблица лидеров по победам (Топ 15):*\n\n"
+    leaderboard_message = "<b>🏅 Таблица лидеров по победам (Топ 15):</b>\n\n"
     for idx, user in enumerate(top_users):
         username = await get_username(user['_id'])
         if username:
             username = username.replace("_", "&#95;")
-        leaderboard_message += f"*{idx + 1}. {username} —* `{user['wins']}` *побед*\n"
+        leaderboard_message += f"<b>{idx + 1}. {username} —</b> <code>{user['wins']}</code> <b>побед</b>\n"
 
     # Add the calling user's position
-    leaderboard_message += f"\n*👤 Ваша позиция:*\n" \
-                           f"*{calling_user_position}.* `{profile_user_id}` *—* `{user_wins}` *побед*"
+    leaderboard_message += f"\n<b>👤 Ваша позиция:</b>\n" \
+                           f"<b>{calling_user_position}.</b> <code>{profile_user_id}</code> <b>—</b> <code>{user_wins}</code> <b>побед</b>"
 
     # Send the leaderboard message
-    await message.answer(leaderboard_message, parse_mode="Markdown")
+    await message.answer(leaderboard_message, parse_mode="HTML")
 
 # Кнопки
 @dp.callback_query_handler(lambda callback_query: True)
