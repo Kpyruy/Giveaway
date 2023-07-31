@@ -170,9 +170,9 @@ async def add_key(key, uses):
     }
     await key_collection.insert_one(key_data)
 
-async def buy_key(key, uses, email, user_id):
+async def add_key_to_data(key, uses, email, user_id):
     key_data = {
-        "key": key,
+        "_id": key,
         "uses": int(uses),
         "email": email,
         "user_id": int(user_id),
@@ -845,13 +845,17 @@ async def start_command(message: types.Message):
         # Код для существующего пользователя
         contest_id = message.get_args()
         if contest_id:
-            contest = await contests_collection.find_one({"_id": int(contest_id)})
-            if contest:
-                owner_id = contest.get("owner_id")
-                owner_data = await user_collections.find_one({"_id": int(owner_id)})
-
+            try:
+                contest = await contests_collection.find_one({"_id": int(contest_id)})
+            except Exception as e:
+                # Код, если конкурс с указанной ссылкой не найден
+                await message.reply("*К сожалению, такого конкурса не существует. ❌*",
+                                                   parse_mode="Markdown")
+                return
             if contest:
                 ended = contest.get("ended")  # Проверяем значение параметра "ended", по умолчанию False
+                owner_id = contest.get("owner_id")
+                owner_data = await user_collections.find_one({"_id": int(owner_id)})
 
                 if ended == "True":
                     # Код, если конкурс завершен
@@ -1021,12 +1025,12 @@ async def generate_command(message: types.Message):
 
             await MenuCategories.uses.set()
     else:
-        # # Код для существующего пользователя
-        # keyboard = types.InlineKeyboardMarkup()
-        # buy_key = types.InlineKeyboardButton(text='Купить ключ 🔑', callback_data='buy_key')
-        # keyboard.row(buy_key)
+        # Код для существующего пользователя
+        keyboard = types.InlineKeyboardMarkup()
+        buy_key = types.InlineKeyboardButton(text='Купить ключ 🔑', callback_data='buy_key')
+        keyboard.row(buy_key)
 
-        await message.reply("*У вас нет доступа для генерации ключей. 🚫*", parse_mode="Markdown")
+        await message.reply("*У вас нет доступа для генерации ключей. 🚫*", parse_mode="Markdown", reply_markup=keyboard)
 
 @dp.message_handler(state=MenuCategories.uses)
 async def process_uses(message: types.Message, state: FSMContext):
@@ -2975,59 +2979,6 @@ async def process_promo_list_command(message: types.Message):
         else:
             await message.reply("*❌ Пожалуйста, укажите идентификатор промокода.*", parse_mode="Markdown")
 
-@dp.message_handler(commands=['help'])
-async def start_contest_command(message: types.Message):
-    user_id = message.from_user.id
-
-    await bot.send_chat_action(user_id, action="typing")
-    await asyncio.sleep(0.7)
-    # Создание и отправка сообщения с кнопками
-    profile = f'*Навигация по боту 💤*\n\n' \
-              f'/start - 🎭 Основное меню, помогает посмотреть свой профиль и активные конкурсы на данный момент, также использовать кнопку `Поддержка 🆘`.\n' \
-              f'/search - 🔎 Поиск конкурса/пользователя, используя его айди.\n' \
-              f'/profile - 👤 Чат-команда для показа своего профиля.\n' \
-              f'/wins — 🥇 Топ пользователей по победам в конкурсах.' \
-              f'/participations — 🍀 Топ пользователей по их участиям в конкурсах.' \
-              f'/promo - 🧪 Просмотр активных промокодов, также их активация!\n' \
-              f'/contest - 🎖 Меню для создания ваших конкурсов и управлениями ими, доступ к меню получается только через `ключ 🔑`.\n' \
-              f'/generate - 🗝️ Создание/покупка (в будущем) ключа для формирования конкурсов!\n' \
-              f'/permanent - 🚫 Список заблокированных пользователей.\n\n'
-
-    # Создание кнопки-ссылки "Детальнее"
-    inline_keyboard = types.InlineKeyboardMarkup()
-    inline_keyboard.add(types.InlineKeyboardButton(text="Детальнее ❔", url="https://teletype.in/@kpyr/Flame"))
-
-    await message.reply(profile, parse_mode="Markdown", reply_markup=inline_keyboard)
-
-@dp.message_handler(commands=['event'])
-async def send_event_to_all_users(message: types.Message):
-    args = message.get_args()
-
-    # Retrieve the user's status from the user_collections
-    profile_user_id = message.from_user.id
-    user_data = await user_collections.find_one({"_id": profile_user_id})
-    status = user_data.get("status")
-
-    if status == "Создатель 🎭":
-
-        if not args:
-            await message.reply("*❔ Вы не указали сообщение, которое хотите отправить!*", parse_mode="Markdown")
-            return
-
-        # Retrieve all user_ids from the user_collections
-        user_ids = [user['_id'] for user in await user_collections.find({}, {'_id': 1}).to_list(length=None)]
-
-        # Send the event message to all users
-        for user_id in user_ids:
-            try:
-                await bot.send_message(user_id, args, parse_mode="Markdown")
-            except Exception as e:
-                await message.reply(f"*🛑 Произошла ошибка, не получилось отправить сообщение пользователю* `{user_id}`: {e}", parse_mode="Markdown")
-
-        await message.reply(f"*💠 Уведомлений было отправлено* `{len(user_ids)}`*.*", parse_mode="Markdown")
-    else:
-        await message.reply("*⚠️ Нельзя воспользоваться командой, так как у вас недостаточно прав для этого.*", parse_mode="Markdown")
-
 # Обработчик команды для получения лог файла в канал
 @dp.message_handler(commands=['log'])
 async def send_log_to_channel_command(message: types.Message):
@@ -3146,6 +3097,130 @@ async def wins_leaderboard(message: types.Message, state: FSMContext):
 
     # Send the leaderboard message
     await message.answer(leaderboard_message, parse_mode="HTML")
+
+@dp.message_handler(commands=['buy_key'])
+async def buy_key(message: types.Message):
+    # Отправляем вопрос о количестве активаций с вариантами выбора
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(
+        types.InlineKeyboardButton("1 активация", callback_data="1"),
+        types.InlineKeyboardButton("3 активации", callback_data="3"),
+        types.InlineKeyboardButton("5 активаций", callback_data="5"),
+        types.InlineKeyboardButton("10 активаций", callback_data="10"),
+    )
+
+    await message.answer("На сколько активаций хотите купить ключ?", reply_markup=keyboard)
+
+# Обработчик выбора количества активаций
+@dp.callback_query_handler()
+async def process_activation_choice(call: types.CallbackQuery):
+    activation_choice = call.data
+    uses = int(activation_choice)
+    await bot.answer_callback_query(call.id)
+
+    # Delete the original message with the inline keyboard
+    await bot.delete_message(call.message.chat.id, call.message.message_id)
+
+    # Генерация ключа, определение его цены и описания
+    key = generate_key()
+    price = uses * 1
+    description = f"🔑 Оплата ключа на {uses} активаций."
+
+    # Отправляем запрос на оплату
+    await bot.send_invoice(
+        chat_id=call.message.chat.id,
+        title="Оформление заказа 🔰",
+        description=description,
+        payload=key,  # Отправляем ключ в payload, чтобы потом узнать, какой ключ оплатили
+        provider_token=PAYMENTS_TOKEN,
+        currency='USD',  # Валюта (в данном случае доллары США)
+        prices=[
+            types.LabeledPrice(label='Ключ доступа', amount=price * 100)  # Цена указывается в центах
+        ],
+        start_parameter='buy_key',  # Уникальный параметр для оплаты
+        need_name=True,
+        need_phone_number=False,
+        need_email=True,
+        need_shipping_address=False,  # Зависит от того, требуется ли доставка товара
+    )
+
+# Обработчик успешной оплаты
+@dp.message_handler(content_types=types.ContentType.SUCCESSFUL_PAYMENT)
+async def process_successful_payment(message: types.Message):
+    # Получаем ключ и прочие данные
+    key = message.successful_payment.invoice_payload
+    uses = 1
+    user_id = message.from_user.id
+
+    # Получаем email пользователя, если он был введен
+    if message.successful_payment.order_info and 'email' in message.successful_payment.order_info:
+        email = message.successful_payment.order_info['email']
+    else:
+        email = "Email не был указан."
+
+    await add_key_to_data(key, uses, email, user_id)
+    # Выполняем какие-либо действия с ключом и email
+    await message.answer(f"*✅ Покупка была успешна! Вы получили ключ* `{key}`.\n"
+                         f"*🔑 Количество активаций:* `{uses}`", parse_mode="Markdown")
+
+# Обработчик предварительной проверки
+@dp.pre_checkout_query_handler(lambda query: True)
+async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
+    # Отправляем ответ о успешной предварительной проверке
+    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+
+@dp.message_handler(commands=['help'])
+async def start_contest_command(message: types.Message):
+    user_id = message.from_user.id
+
+    await bot.send_chat_action(user_id, action="typing")
+    await asyncio.sleep(0.7)
+    # Создание и отправка сообщения с кнопками
+    profile = f'*Навигация по боту 💤*\n\n' \
+              f'/start - 🎭 Основное меню, помогает посмотреть свой профиль и активные конкурсы на данный момент, также использовать кнопку `Поддержка 🆘`.\n' \
+              f'/search - 🔎 Поиск конкурса/пользователя, используя его айди.\n' \
+              f'/profile - 👤 Чат-команда для показа своего профиля.\n' \
+              f'/wins — 🥇 Топ пользователей по победам в конкурсах.' \
+              f'/participations — 🍀 Топ пользователей по их участиям в конкурсах.' \
+              f'/promo - 🧪 Просмотр активных промокодов, также их активация!\n' \
+              f'/contest - 🎖 Меню для создания ваших конкурсов и управлениями ими, доступ к меню получается только через `ключ 🔑`.\n' \
+              f'/generate - 🗝️ Создание/покупка (в будущем) ключа для формирования конкурсов!\n' \
+              f'/permanent - 🚫 Список заблокированных пользователей.\n\n'
+
+    # Создание кнопки-ссылки "Детальнее"
+    inline_keyboard = types.InlineKeyboardMarkup()
+    inline_keyboard.add(types.InlineKeyboardButton(text="Детальнее ❔", url="https://teletype.in/@kpyr/Flame"))
+
+    await message.reply(profile, parse_mode="Markdown", reply_markup=inline_keyboard)
+
+@dp.message_handler(commands=['event'])
+async def send_event_to_all_users(message: types.Message):
+    args = message.get_args()
+
+    # Retrieve the user's status from the user_collections
+    profile_user_id = message.from_user.id
+    user_data = await user_collections.find_one({"_id": profile_user_id})
+    status = user_data.get("status")
+
+    if status == "Создатель 🎭":
+
+        if not args:
+            await message.reply("*❔ Вы не указали сообщение, которое хотите отправить!*", parse_mode="Markdown")
+            return
+
+        # Retrieve all user_ids from the user_collections
+        user_ids = [user['_id'] for user in await user_collections.find({}, {'_id': 1}).to_list(length=None)]
+
+        # Send the event message to all users
+        for user_id in user_ids:
+            try:
+                await bot.send_message(user_id, args, parse_mode="Markdown")
+            except Exception as e:
+                await message.reply(f"*🛑 Произошла ошибка, не получилось отправить сообщение пользователю* `{user_id}`: {e}", parse_mode="Markdown")
+
+        await message.reply(f"*💠 Уведомлений было отправлено* `{len(user_ids)}`*.*", parse_mode="Markdown")
+    else:
+        await message.reply("*⚠️ Нельзя воспользоваться командой, так как у вас недостаточно прав для этого.*", parse_mode="Markdown")
 
 # Кнопки
 @dp.callback_query_handler(lambda callback_query: True)
@@ -4134,10 +4209,10 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         await show_user_permanent(callback_query, user_id, current_page)
 
     elif button_text == 'buy_key':
-        result_message = "*💲 Цена ключа на одну активацию* `1$`\n" \
-                         "*🔑 Воспользуйтесь командой* /buy_key *для покупки ключа.*"
-        await bot.edit_message_text(result_message, callback_query.message.chat.id, callback_query.message.message_id, parse_mode="Markdown",
-                                    reply_markup=keyboard)
+        result_message = "<b>💲 Цена ключа на одну активацию</b> <code>1$</code>\n" \
+                         "<b>🔑 Воспользуйтесь командой</b> /buy_key <b>для покупки ключа.</b>"
+        await bot.edit_message_text(result_message, callback_query.message.chat.id, callback_query.message.message_id,
+                                    parse_mode="HTML")
 
     elif button_text == 'done':
 
@@ -4274,61 +4349,7 @@ async def check_and_perform_contest_draw():
 # log
 logging.basicConfig(level=logging.INFO)
 
-# # Команда для покупки ключа
-# @dp.message_handler(commands=['buy_key'])
-# async def buy_key(message: types.Message):
-#     # Генерация ключа, определение его цены и описания
-#     key = generate_key()
-#     price = 1  # Укажите здесь цену ключа
-#     description = f"🔑 Оплата ключа."
-#
-#     # Отправляем запрос на оплату
-#     await bot.send_invoice(
-#         chat_id=message.chat.id,
-#         title="Оформление заказа 🔰",
-#         description=description,
-#         payload=key,  # Отправляем ключ в payload, чтобы потом узнать, какой ключ оплатили
-#         provider_token=PAYMENTS_TOKEN,
-#         currency='USD',  # Валюта (в данном случае российский рубль)
-#         prices=[
-#             types.LabeledPrice(label='Ключ доступа', amount=price * 100)  # Цена указывается в копейках
-#         ],
-#         start_parameter='buy_key',  # Уникальный параметр для оплаты
-#         need_name=True,
-#         need_phone_number=False,
-#         need_email=True,
-#         need_shipping_address=False,  # Зависит от того, требуется ли доставка товара
-#     )
-#
-# # Обработчик успешной оплаты
-# @dp.message_handler(content_types=types.ContentType.SUCCESSFUL_PAYMENT)
-# async def process_successful_payment(message: types.Message):
-#     # Получаем ключ и прочие данные
-#     key = message.successful_payment.invoice_payload
-#     uses = 1
-#     user_id = message.from_user.id
-#
-#     # Получаем email пользователя, если он был введен
-#     if message.successful_payment.order_info and 'email' in message.successful_payment.order_info:
-#         email = message.successful_payment.order_info['email']
-#     else:
-#         email = "Email не был указан."
-#
-#     # Вызываем функцию buy_key с необходимыми аргументами
-#     await buy_key(key, uses, email, user_id)
-#
-#     # Выполняем какие-либо действия с ключом и email
-#     await message.answer(f"*✅ Покупка была успешна! Вы получили ключ* `{key}`.\n"
-#                          f"*🔑 Количество активаций:* {uses}")
-#
-# # Обработчик предварительной проверки
-# @dp.pre_checkout_query_handler(lambda query: True)
-# async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
-#     # Отправляем ответ о успешной предварительной проверке
-#     await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
-
 # Асинхронная функция для обновления статусов пользователей каждую секунду
-
 async def update_statuses():
     while True:
         # Получение всех пользователей
