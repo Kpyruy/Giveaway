@@ -2847,7 +2847,7 @@ async def get_user_profile(message: types.Message):
         print(e)
         await message.reply("Ошибка при получении профиля пользователя. Пожалуйста, убедитесь, что вы указали правильный айди.")
 
-@dp.message_handler(сommands=['leaderboard'])
+@dp.message_handler(commands=['leaderboard'])
 async def wins_leaderboard(message: types.Message, state: FSMContext):
     # Retrieve the user's status from the user_collections
     profile_user_id = message.from_user.id
