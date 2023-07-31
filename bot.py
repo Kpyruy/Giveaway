@@ -2902,7 +2902,7 @@ async def wins_leaderboard(message: types.Message, state: FSMContext):
         username = await get_username(user['_id'])
         if username:
             username = username.replace("_", "&#95;")
-        leaderboard_message += f"<b>{idx + 1}. username —</b> <code>{user['participation']}</code> <b>участий</b>\n"
+        leaderboard_message += f"<b>{idx + 1}. {username} —</b> <code>{user['participation']}</code> <b>участий</b>\n"
 
     # Add the calling user's position
     leaderboard_message += f"\n<b>👤 Ваша позиция:</b>\n" \
