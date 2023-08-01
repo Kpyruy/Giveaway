@@ -1025,12 +1025,12 @@ async def generate_command(message: types.Message):
 
             await MenuCategories.uses.set()
     else:
-        # Код для существующего пользователя
-        keyboard = types.InlineKeyboardMarkup()
-        buy_key = types.InlineKeyboardButton(text='Купить ключ 🔑', callback_data='buy_key')
-        keyboard.row(buy_key)
+        # # Код для существующего пользователя
+        # keyboard = types.InlineKeyboardMarkup()
+        # buy_key = types.InlineKeyboardButton(text='Купить ключ 🔑', callback_data='buy_key')
+        # keyboard.row(buy_key) , reply_markup=keyboard
 
-        await message.reply("*У вас нет доступа для генерации ключей. 🚫*", parse_mode="Markdown", reply_markup=keyboard)
+        await message.reply("*У вас нет доступа для генерации ключей. 🚫*", parse_mode="Markdown")
 
 @dp.message_handler(state=MenuCategories.uses)
 async def process_uses(message: types.Message, state: FSMContext):
