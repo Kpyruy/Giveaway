@@ -3098,76 +3098,76 @@ async def wins_leaderboard(message: types.Message, state: FSMContext):
     # Send the leaderboard message
     await message.answer(leaderboard_message, parse_mode="HTML")
 
-@dp.message_handler(commands=['buy_key'])
-async def buy_key(message: types.Message):
-    # Отправляем вопрос о количестве активаций с вариантами выбора
-    keyboard = types.InlineKeyboardMarkup()
-    keyboard.add(
-        types.InlineKeyboardButton("1 активация", callback_data="1"),
-        types.InlineKeyboardButton("3 активации", callback_data="3"),
-        types.InlineKeyboardButton("5 активаций", callback_data="5"),
-        types.InlineKeyboardButton("10 активаций", callback_data="10"),
-    )
-
-    await message.answer("На сколько активаций хотите купить ключ?", reply_markup=keyboard)
-
-# Обработчик выбора количества активаций
-@dp.callback_query_handler()
-async def process_activation_choice(call: types.CallbackQuery):
-    activation_choice = call.data
-    uses = int(activation_choice)
-    await bot.answer_callback_query(call.id)
-
-    # Delete the original message with the inline keyboard
-    await bot.delete_message(call.message.chat.id, call.message.message_id)
-
-    # Генерация ключа, определение его цены и описания
-    key = generate_key()
-    price = uses * 1
-    description = f"🔑 Оплата ключа на {uses} активаций."
-
-    # Отправляем запрос на оплату
-    await bot.send_invoice(
-        chat_id=call.message.chat.id,
-        title="Оформление заказа 🔰",
-        description=description,
-        payload=key,  # Отправляем ключ в payload, чтобы потом узнать, какой ключ оплатили
-        provider_token=PAYMENTS_TOKEN,
-        currency='USD',  # Валюта (в данном случае доллары США)
-        prices=[
-            types.LabeledPrice(label='Ключ доступа', amount=price * 100)  # Цена указывается в центах
-        ],
-        start_parameter='buy_key',  # Уникальный параметр для оплаты
-        need_name=True,
-        need_phone_number=False,
-        need_email=True,
-        need_shipping_address=False,  # Зависит от того, требуется ли доставка товара
-    )
-
-# Обработчик успешной оплаты
-@dp.message_handler(content_types=types.ContentType.SUCCESSFUL_PAYMENT)
-async def process_successful_payment(message: types.Message):
-    # Получаем ключ и прочие данные
-    key = message.successful_payment.invoice_payload
-    uses = 1
-    user_id = message.from_user.id
-
-    # Получаем email пользователя, если он был введен
-    if message.successful_payment.order_info and 'email' in message.successful_payment.order_info:
-        email = message.successful_payment.order_info['email']
-    else:
-        email = "Email не был указан."
-
-    await add_key_to_data(key, uses, email, user_id)
-    # Выполняем какие-либо действия с ключом и email
-    await message.answer(f"*✅ Покупка была успешна! Вы получили ключ* `{key}`.\n"
-                         f"*🔑 Количество активаций:* `{uses}`", parse_mode="Markdown")
-
-# Обработчик предварительной проверки
-@dp.pre_checkout_query_handler(lambda query: True)
-async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
-    # Отправляем ответ о успешной предварительной проверке
-    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+# @dp.message_handler(commands=['buy_key'])
+# async def buy_key(message: types.Message):
+#     # Отправляем вопрос о количестве активаций с вариантами выбора
+#     keyboard = types.InlineKeyboardMarkup()
+#     keyboard.add(
+#         types.InlineKeyboardButton("1 активация", callback_data="1"),
+#         types.InlineKeyboardButton("3 активации", callback_data="3"),
+#         types.InlineKeyboardButton("5 активаций", callback_data="5"),
+#         types.InlineKeyboardButton("10 активаций", callback_data="10"),
+#     )
+#
+#     await message.answer("На сколько активаций хотите купить ключ?", reply_markup=keyboard)
+#
+# # Обработчик выбора количества активаций
+# @dp.callback_query_handler()
+# async def process_activation_choice(call: types.CallbackQuery):
+#     activation_choice = call.data
+#     uses = int(activation_choice)
+#     await bot.answer_callback_query(call.id)
+#
+#     # Delete the original message with the inline keyboard
+#     await bot.delete_message(call.message.chat.id, call.message.message_id)
+#
+#     # Генерация ключа, определение его цены и описания
+#     key = generate_key()
+#     price = uses * 1
+#     description = f"🔑 Оплата ключа на {uses} активаций."
+#
+#     # Отправляем запрос на оплату
+#     await bot.send_invoice(
+#         chat_id=call.message.chat.id,
+#         title="Оформление заказа 🔰",
+#         description=description,
+#         payload=key,  # Отправляем ключ в payload, чтобы потом узнать, какой ключ оплатили
+#         provider_token=PAYMENTS_TOKEN,
+#         currency='USD',  # Валюта (в данном случае доллары США)
+#         prices=[
+#             types.LabeledPrice(label='Ключ доступа', amount=price * 100)  # Цена указывается в центах
+#         ],
+#         start_parameter='buy_key',  # Уникальный параметр для оплаты
+#         need_name=True,
+#         need_phone_number=False,
+#         need_email=True,
+#         need_shipping_address=False,  # Зависит от того, требуется ли доставка товара
+#     )
+#
+# # Обработчик успешной оплаты
+# @dp.message_handler(content_types=types.ContentType.SUCCESSFUL_PAYMENT)
+# async def process_successful_payment(message: types.Message):
+#     # Получаем ключ и прочие данные
+#     key = message.successful_payment.invoice_payload
+#     uses = 1
+#     user_id = message.from_user.id
+#
+#     # Получаем email пользователя, если он был введен
+#     if message.successful_payment.order_info and 'email' in message.successful_payment.order_info:
+#         email = message.successful_payment.order_info['email']
+#     else:
+#         email = "Email не был указан."
+#
+#     await add_key_to_data(key, uses, email, user_id)
+#     # Выполняем какие-либо действия с ключом и email
+#     await message.answer(f"*✅ Покупка была успешна! Вы получили ключ* `{key}`.\n"
+#                          f"*🔑 Количество активаций:* `{uses}`", parse_mode="Markdown")
+#
+# # Обработчик предварительной проверки
+# @dp.pre_checkout_query_handler(lambda query: True)
+# async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
+#     # Отправляем ответ о успешной предварительной проверке
+#     await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 @dp.message_handler(commands=['help'])
 async def start_contest_command(message: types.Message):
@@ -3209,7 +3209,7 @@ async def send_event_to_all_users(message: types.Message):
             return
 
         # Retrieve all user_ids from the user_collections
-        user_ids = [user['_id'] for user in await user_collections.find({}, {'_id': 1}).to_list(length=None)]
+        user_ids = [user['_id'] for user in await test_collection.find({}, {'_id': 1}).to_list(length=None)]
 
         # Send the event message to all users
         for user_id in user_ids:
