@@ -3124,7 +3124,12 @@ async def process_activation_choice(call: types.CallbackQuery):
     # Генерация ключа, определение его цены и описания
     key = generate_key()
     price = uses * 1
-    description = f"🔑 Оплата ключа на {uses} активаций."
+    if uses == 1:
+        description = f"🔑 Оплата ключа на {uses} активацию."
+    elif uses == 3:
+        description = f"🔑 Оплата ключа на {uses} активации."
+    else:
+        description = f"🔑 Оплата ключа на {uses} активаций."
 
     # Отправляем запрос на оплату
     await bot.send_invoice(
