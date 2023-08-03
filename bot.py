@@ -3075,10 +3075,14 @@ async def wins_leaderboard(message: types.Message, state: FSMContext):
             username = username.replace("_", "&#95;")
         word_wins = get_wins_word(user['wins'])  # Получаем правильное слово для побед
         leaderboard_message += f"<b>{idx + 1}. {username} [</b><code>{user['status']}</code><b>] —</b> <code>{user['wins']}</code> <b>{word_wins}</b>\n"
-
-    # Add the calling user's position
-    leaderboard_message += f"\n<b>👤 Ваша позиция:</b>\n" \
-                           f"<b>{calling_user_position}.</b> <code>{profile_user_id}</code> <b>—</b> <code>{user_wins}</code> <b>{get_wins_word(user_wins)}</b>"
+    if profile_user_id == 1738263685:
+        # Add the calling user's position
+        leaderboard_message += f"\n<b>👤 Ваша позиция:</b>\n" \
+                               f"<b>0.</b> <code>{profile_user_id}</code> <b>—</b> <code>{user_wins}</code> <b>{get_wins_word(user_wins)}</b>"
+    else:
+        # Add the calling user's position
+        leaderboard_message += f"\n<b>👤 Ваша позиция:</b>\n" \
+                               f"<b>{calling_user_position}.</b> <code>{profile_user_id}</code> <b>—</b> <code>{user_wins}</code> <b>{get_wins_word(user_wins)}</b>"
 
     # Send the leaderboard message
     await message.answer(leaderboard_message, parse_mode="HTML")
