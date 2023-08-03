@@ -1027,7 +1027,7 @@ async def generate_command(message: types.Message):
     else:
         # Код для существующего пользователя
         keyboard = types.InlineKeyboardMarkup()
-        buy_key = types.InlineKeyboardButton(text='Купить ключ 🔑', callback_data='buy_key')
+        buy_key = types.InlineKeyboardButton(text='Купить ключ 🔑', callback_data='text_for_key')
         keyboard.row(buy_key)
 
         await message.reply("*У вас нет доступа для генерации ключей. 🚫*", parse_mode="Markdown", reply_markup=keyboard)
@@ -3103,18 +3103,18 @@ async def buy_key(message: types.Message):
     # Отправляем вопрос о количестве активаций с вариантами выбора
     keyboard = types.InlineKeyboardMarkup()
     keyboard.add(
-        types.InlineKeyboardButton("1 активация", callback_data="1"),
-        types.InlineKeyboardButton("3 активации", callback_data="3"),
-        types.InlineKeyboardButton("5 активаций", callback_data="5"),
-        types.InlineKeyboardButton("10 активаций", callback_data="10"),
+        types.InlineKeyboardButton("1 активация", callback_data="buy_1"),
+        types.InlineKeyboardButton("3 активации", callback_data="buy_3"),
+        types.InlineKeyboardButton("5 активаций", callback_data="buy_5"),
+        types.InlineKeyboardButton("10 активаций", callback_data="buy_10"),
     )
 
-    await message.answer("На сколько активаций хотите купить ключ?", reply_markup=keyboard)
+    await message.answer("*На сколько активаций хотите купить ключ?*", reply_markup=keyboard, parse_mode="Markdown")
 
 # Обработчик выбора количества активаций
-@dp.callback_query_handler()
+@dp.callback_query_handler(lambda call: call.data.startswith("buy"))
 async def process_activation_choice(call: types.CallbackQuery):
-    activation_choice = call.data
+    activation_choice = call.data.split("_")[1]  # Извлекаем выбор количества активаций из callback_data
     uses = int(activation_choice)
     await bot.answer_callback_query(call.id)
 
@@ -4208,7 +4208,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
 
         await show_user_permanent(callback_query, user_id, current_page)
 
-    elif button_text == 'buy_key':
+    elif button_text == 'text_for_key':
         result_message = "<b>💲 Цена ключа на одну активацию</b> <code>1$</code>\n" \
                          "<b>🔑 Воспользуйтесь командой</b> /buy_key <b>для покупки ключа.</b>"
         await bot.edit_message_text(result_message, callback_query.message.chat.id, callback_query.message.message_id,
