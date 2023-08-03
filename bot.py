@@ -817,6 +817,22 @@ async def show_user_drawings(callback_query, user_id, current_page):
                                             callback_query.message.message_id, parse_mode="Markdown", reply_markup=keyboard)
         profile_messages.append(reply.message_id)
 
+def get_participation_word(count):
+    if count % 10 == 1 and count % 100 != 11:
+        return "участие"
+    elif 2 <= count % 10 <= 4 and (count % 100 < 10 or count % 100 >= 20):
+        return "участия"
+    else:
+        return "участий"
+
+def get_wins_word(count):
+    if count % 10 == 1 and count % 100 != 11:
+        return "победа"
+    elif 2 <= count % 10 <= 4 and (count % 100 < 10 or count % 100 >= 20):
+        return "победы"
+    else:
+        return "побед"
+
 # Объявление глобальных переменных
 contest_name = None
 contest_id = None
@@ -3057,11 +3073,12 @@ async def wins_leaderboard(message: types.Message, state: FSMContext):
         username = await get_username(user['_id'])
         if username:
             username = username.replace("_", "&#95;")
-        leaderboard_message += f"<b>{idx + 1}. {username} [</b><code>{user['status']}</code><b>] —</b> <code>{user['wins']}</code> <b>побед</b>\n"
+        word_wins = get_wins_word(user['wins'])  # Получаем правильное слово для побед
+        leaderboard_message += f"<b>{idx + 1}. {username} [</b><code>{user['status']}</code><b>] —</b> <code>{user['wins']}</code> <b>{word_wins}</b>\n"
 
     # Add the calling user's position
     leaderboard_message += f"\n<b>👤 Ваша позиция:</b>\n" \
-                           f"<b>{calling_user_position}.</b> <code>{profile_user_id}</code> <b>—</b> <code>{user_wins}</code> <b>побед</b>"
+                           f"<b>{calling_user_position}.</b> <code>{profile_user_id}</code> <b>—</b> <code>{user_wins}</code> <b>{get_wins_word(user_wins)}</b>"
 
     # Send the leaderboard message
     await message.answer(leaderboard_message, parse_mode="HTML")
@@ -3089,11 +3106,12 @@ async def wins_leaderboard(message: types.Message, state: FSMContext):
         username = await get_username(user['_id'])
         if username:
             username = username.replace("_", "&#95;")
-        leaderboard_message += f"<b>{idx + 1}. {username} [</b><code>{user['status']}</code><b>] —</b> <code>{user['participation']}</code> <b>участий</b>\n"
+        word_participation = get_participation_word(user['participation'])  # Получаем правильное слово для участий
+        leaderboard_message += f"<b>{idx + 1}. {username} [</b><code>{user['status']}</code><b>] —</b> <code>{user['participation']}</code> <b>{word_participation}</b>\n"
 
     # Add the calling user's position
     leaderboard_message += f"\n<b>👤 Ваша позиция:</b>\n" \
-                           f"<b>{calling_user_position}.</b> <code>{profile_user_id}</code> <b>—</b> <code>{user_participation}</code> <b>участий</b>"
+                           f"<b>{calling_user_position}.</b> <code>{profile_user_id}</code> <b>—</b> <code>{user_participation}</code> <b>{get_participation_word(user_participation)}</b>"
 
     # Send the leaderboard message
     await message.answer(leaderboard_message, parse_mode="HTML")
