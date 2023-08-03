@@ -848,6 +848,23 @@ change_message_id = []
 permanent_message_id = []
 promo_message_id = []
 
+# Установка списка команд бота
+async def set_bot_commands():
+    commands = [
+        types.BotCommand(command="/start", description="- Открыть основное меню 🫥"),
+        types.BotCommand(command="/search", description="- Поиск по айди 🔎"),
+        types.BotCommand(command="/profile", description="- Открыть свой профиль 👤"),
+        types.BotCommand(command="/promo", description="- Воспользоваться промокодом 🧪"),
+        types.BotCommand(command="/wins", description="- Топ пользователей по победам в конкурсах 🥇"),
+        types.BotCommand(command="/participations", description="- Топ пользователей по участиям в конкурсах 🍀"),
+        types.BotCommand(command="/contest", description="- Конкурс меню 🎖"),
+        types.BotCommand(command="/generate", description="- Получить ключ доступа 🔑"),
+        types.BotCommand(command="/permanent", description="- Список заблокированный пользователей 🚫"),
+        types.BotCommand(command="/help", description="- Показать навигацию по боту❔")
+        # Добавьте остальные команды, если есть
+    ]
+    await bot.set_my_commands(commands)
+
 @dp.message_handler(commands=['start'])
 async def start_command(message: types.Message):
     if message.chat.type != 'private':
@@ -4458,11 +4475,14 @@ update_statuses_task = asyncio.get_event_loop().create_task(update_statuses())
 # Создание и запуск асинхронного цикла для функции обновления статусов пользователей
 update_promo_task = asyncio.get_event_loop().create_task(update_promo())
 
+# Создание и запуск асинхронного цикла для функции обновления статусов пользователей
+bot_commands_tak = asyncio.get_event_loop().create_task(set_bot_commands())
+
 # Запуск основного асинхронного цикла для работы бота
 bot_loop = asyncio.get_event_loop()
 bot_task = bot_loop.create_task(main())
 
 # Запуск всех задач
 loop = asyncio.get_event_loop()
-tasks = asyncio.gather(contest_draw_task, bot_task, update_statuses_task, update_promo_task)
+tasks = asyncio.gather(contest_draw_task, bot_task, update_statuses_task, update_promo_task, bot_commands_tak)
 loop.run_until_complete(tasks)
