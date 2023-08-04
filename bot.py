@@ -7,7 +7,7 @@ import pytz
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode, ChatMember
 from aiogram.types.message import ContentType
 from aiogram.dispatcher.filters import Command
 from aiogram.dispatcher.filters.state import State, StatesGroup
@@ -36,6 +36,7 @@ key_collection = cluster.RandomBot.key
 contests_collection = cluster.RandomBot.contests
 promo_collection = cluster.RandomBot.promo
 test_collection = cluster.RandomBot.test
+groups_collection = cluster.RandomBot.groups
 
 timezone = pytz.timezone('Europe/Kiev')
 current_time = datetime.now(timezone)
@@ -59,6 +60,7 @@ class MenuCategories(StatesGroup):
     id_check = State()
     search_check = State()
     contest_search_profile = State()
+    welcome = State()
 
 class CreateContestState(StatesGroup):
     name = State()
@@ -832,6 +834,15 @@ def get_wins_word(count):
         return "победы"
     else:
         return "побед"
+
+async def get_chat_administrators(chat_id):
+    administrators = await bot.get_chat_administrators(chat_id)
+    admins_ids = [admin.user.id for admin in administrators]
+    return admins_ids
+
+async def get_chat_members_count(chat_id):
+    count = await bot.get_chat_members_count(chat_id)
+    return count
 
 # Объявление глобальных переменных
 contest_name = None
@@ -2653,6 +2664,84 @@ async def search_callback(callback_query: types.CallbackQuery, state: FSMContext
     await state.update_data(contest_id=contest_id)
     await state.update_data(prev_message_id=callback_query.message.message_id)
 
+# Изменение welcome message
+@dp.callback_query_handler(text='decline_welcome', state=MenuCategories.welcome)
+async def decline_search_callback(callback_query: types.CallbackQuery, state: FSMContext):
+    chat_id = (await state.get_data()).get('chat_id')
+    user_id = callback_query.from_user.id
+    await callback_query.answer()
+    await state.finish()
+    keyboard = types.InlineKeyboardMarkup()
+    not_back = types.InlineKeyboardButton(text='Остаться ✏️',
+                                      callback_data=f'welcome_{chat_id}_{user_id}')
+    back = types.InlineKeyboardButton(text='Вернуться 📘',
+                                      callback_data=f'group_{chat_id}_{user_id}_edit')
+    keyboard.row(back, not_back)
+    result_message = "*💬 Вы уверены что хотите отменить изменение приветственного сообщения?*"
+    await bot.edit_message_text(result_message, callback_query.message.chat.id, callback_query.message.message_id,
+                                            parse_mode="Markdown",
+                                            reply_markup=keyboard)
+
+@dp.message_handler(state=MenuCategories.welcome)
+async def process_search(message: types.Message, state: FSMContext):
+    await bot.delete_message(message.chat.id, message.message_id)
+
+    chat_id = (await state.get_data()).get('chat_id')
+    message_id = (await state.get_data()).get('message_id')
+    await state.finish()
+
+    user_id = message.from_user.id
+
+    new_welcome = message.text
+
+    await groups_collection.update_one({"_id": int(chat_id)},
+                                      {"$set": {"welcome": new_welcome}})
+    # Поиск конкурса по айди
+    group = await groups_collection.find_one({"_id": int(chat_id)})
+
+    welcome = group.get("welcome")
+    result_message = "*✅ Новое приветственное сообщение:*\n" \
+                     f"{welcome}"
+
+    keyboard = types.InlineKeyboardMarkup()
+    back = types.InlineKeyboardButton(text='Назад 📘', callback_data=f'group_{chat_id}_{user_id}')
+    keyboard.row(back)
+
+    await bot.edit_message_text(result_message, message.chat.id, message_id, parse_mode="Markdown",
+                                                reply_markup=keyboard)
+
+
+@dp.callback_query_handler(lambda c: c.data.startswith('welcome'))
+async def search_callback(callback_query: types.CallbackQuery, state: FSMContext):
+    call_user_id = callback_query.from_user.id
+
+    button_text = callback_query.data
+    parts = button_text.split('_')
+    chat_id = int(parts[1])
+    user_id = int(parts[2])
+
+    if call_user_id != user_id:
+        await bot.answer_callback_query(callback_query.id,
+                                        text="❌ Увы, эта кнопка не является вашой, а так хотелось...")
+        return
+
+    welcome_text = "<b>⚙️ Для использования доступны параметры:</b>\n" \
+                   "*текст* - <b>Жирный</b>\n" \
+                   "_текст_ - <i>Курсив</i>\n" \
+                   "{user_id} - айди пользователя который присоединился.\n\n" \
+                   "<b>✏️ Введите новое сообщение:</b>" \
+
+    keyboard = types.InlineKeyboardMarkup()
+    input_id = types.InlineKeyboardButton(text='Отмена ❌', callback_data='decline_welcome')
+    keyboard.row(input_id)
+
+    await bot.edit_message_text(welcome_text, callback_query.message.chat.id, callback_query.message.message_id,
+                                parse_mode="HTML", reply_markup=keyboard)
+    await MenuCategories.welcome.set()
+    await state.update_data(chat_id=chat_id)
+    await state.update_data(message_id=callback_query.message.message_id)
+    await state.update_data(prev_message_id=callback_query.message.message_id)
+
 # Поиск через команду
 @dp.message_handler(commands=['search'])
 async def process_search_command(message: types.Message, state: FSMContext):
@@ -3265,6 +3354,53 @@ async def send_event_to_all_users(message: types.Message):
         await message.reply(f"*💠 Уведомлений было отправлено* `{len(user_ids)}`*.*", parse_mode="Markdown")
     else:
         await message.reply("*⚠️ Нельзя воспользоваться командой, так как у вас недостаточно прав для этого.*", parse_mode="Markdown")
+
+@dp.message_handler(commands=['settings'])
+async def settings(message: types.Message):
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+
+    # Получаем информацию о пользователе в чате
+    chat_member = await bot.get_chat_member(chat_id, user_id)
+
+    # Проверяем статус пользователя
+    if chat_member.status in ['creator', 'administrator']:
+        chat_title = message.chat.title
+        chat_description = message.chat.description
+        chat_type = message.chat.type
+
+        admins = await get_chat_administrators(chat_id)
+        members = await get_chat_members_count(chat_id)
+
+        group_data = {
+            "_id": chat_id,
+            "title": chat_title,
+            "description": chat_description,
+            "type": chat_type,
+            "admins": admins,
+            "members": members,
+            "welcome": "Отсутствует."
+        }
+
+        existing_group = await groups_collection.find_one({"_id": chat_id})
+        if existing_group:
+            await groups_collection.replace_one({"_id": chat_id}, group_data)
+        else:
+            await groups_collection.insert_one(group_data)
+
+        # Отправляем меню с настройками
+        keyboard = types.InlineKeyboardMarkup()
+        private_messages = types.InlineKeyboardButton(text='Личные сообщения 🗒️',
+                                                      callback_data=f'group_{chat_id}_{user_id}_private')
+        group_message = types.InlineKeyboardButton(text='Чат 💬',
+                                                   callback_data=f'group_{chat_id}_{user_id}_chat')
+        keyboard.row(group_message, private_messages)
+
+        group_settings = "*⚙️ Меню управления группой!*\n\n" \
+                         "*🚧 Отправить меню в *`чат`* или в *`личные сообщение`*?*"
+        await message.reply(group_settings, parse_mode="Markdown", reply_markup=keyboard)
+    else:
+        await message.reply("*❌ У вас недостаточно прав для выполнения этой команды.*", parse_mode="Markdown")
 
 # Кнопки
 @dp.callback_query_handler(lambda callback_query: True)
@@ -4258,12 +4394,57 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         await bot.edit_message_text(result_message, callback_query.message.chat.id, callback_query.message.message_id,
                                     parse_mode="HTML")
 
-    elif button_text == 'done':
+    elif button_text.startswith('group'):
+        call_user_id = callback_query.from_user.id
+        parts = button_text.split('_')
+        chat_id = int(parts[1])
+        user_id = int(parts[2])
+        message = parts[3]
+        existing_group = await groups_collection.find_one({"_id": chat_id})
 
-        await bot.answer_callback_query(callback_query.id, text="Задача была выполнена успешно! ✔️")
+        if call_user_id != user_id:
+            await bot.answer_callback_query(callback_query.id, text="❌ Увы, эта кнопка не является вашой, а так хотелось...")
+            return
 
-        await bot.delete_message(callback_query.message.chat.id,
-                                 callback_query.message.message_id)  # Удаление сообщения
+        # Отправляем меню с настройками
+        keyboard = types.InlineKeyboardMarkup()
+        welcome_message = types.InlineKeyboardButton(text='Приветственное сообщение 👋',
+                                                      callback_data=f'group_{chat_id}_{user_id}_welcome')
+        members_list = types.InlineKeyboardButton(text='Список участников 👥',
+                                                   callback_data=f'group_{chat_id}_{user_id}_memberlist')
+        keyboard.row(welcome_message)
+        keyboard.row(members_list)
+
+        if message == "private":
+            await bot.send_message(user_id, "*⚙️ Меню управления группой:*", parse_mode="Markdown", reply_markup=keyboard)
+        elif message == "chat":
+            await bot.send_message(chat_id, "*⚙️ Меню управления группой:*", parse_mode="Markdown",  reply_markup=keyboard)
+        elif message == "welcome":
+
+            welcome = existing_group.get("welcome")
+            welcome_msg = "*👋 Текущее приветственное сообщение:*\n\n" \
+                          f"{welcome}\n\n"
+
+            # Отправляем меню с настройками
+            keyboard = types.InlineKeyboardMarkup()
+            change_welcome_message = types.InlineKeyboardButton(text='Изменить ✏️',
+                                                         callback_data=f'welcome_{chat_id}_{user_id}')
+            back = types.InlineKeyboardButton(text='Назад 📘',
+                                                      callback_data=f'group_{chat_id}_{user_id}_edit')
+            keyboard.row(change_welcome_message)
+            keyboard.row(back)
+
+            await bot.edit_message_text(welcome_msg, callback_query.message.chat.id,
+                                                callback_query.message.message_id, parse_mode="Markdown",
+                                                reply_markup=keyboard)
+        elif message == "memberlist":
+            await bot.edit_message_text(profile, callback_query.message.chat.id,
+                                                callback_query.message.message_id, parse_mode="Markdown",
+                                                reply_markup=keyboard)
+        elif message == "edit":
+            await bot.edit_message_text("*⚙️ Меню управления группой:*", callback_query.message.chat.id,
+                                                callback_query.message.message_id, parse_mode="Markdown",
+                                                reply_markup=keyboard)
 
 async def perform_contest_draw(contest_id):
     # Получение данных о конкурсе
