@@ -901,6 +901,7 @@ async def set_bot_commands():
         types.BotCommand(command="/promo", description="-  Воспользоваться промокодом 🧪"),
         types.BotCommand(command="/wins", description="-  Топ пользователей по победам в конкурсах 🥇"),
         types.BotCommand(command="/participations", description="-  Топ пользователей по участиям в конкурсах 🍀"),
+        types.BotCommand(command="/create", description="-  Создать игровую комнату. 🎮"),
         types.BotCommand(command="/contest", description="-  Конкурс меню 🎖"),
         types.BotCommand(command="/generate", description="-  Получить ключ доступа 🔑"),
         types.BotCommand(command="/permanent", description="-  Список заблокированный пользователей 🚫"),
