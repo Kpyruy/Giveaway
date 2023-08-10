@@ -1001,17 +1001,6 @@ async def play_command(message: types.Message):
         await message.reply("*❌ Вы уже добавлены в эту комнату.*", parse_mode="Markdown", reply_markup=keyboard)
         return
 
-    try:
-        # Check if the user is already a member of 5 active rooms
-        active_rooms = await game_collection.find_one({"members": user_id, "ended": "False"})
-        if len(active_rooms) >= 5:
-            print(len(active_rooms))
-            await message.reply("*❌ Вы не можете участвовать в более чем 5 комнатах одновременно.*",
-                                parse_mode="Markdown")
-            return
-    except Exception:
-        pass
-
     # Check if the game already has the maximum number of players based on its format
     max_players = 4 if game_format == "2vs2" else 2
     current_players = len(game.get("members", []))
