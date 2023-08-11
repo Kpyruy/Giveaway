@@ -5032,7 +5032,6 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             # Отправка сообщения о ничьей всем участникам
             draw_message = "*🌉 Данная игра была закончена ничьей, поэтому победителей нет.*"
             for member in members:
-                print(member)
                 await user_collections.update_one({"_id": member}, {"$inc": {"draws": 1}})
                 await bot.send_message(member, draw_message, parse_mode="Markdown")
             await game_collection.update_one({"_id": room_id}, {"$set": {"draw": "True"}})
