@@ -3,3 +3,5 @@ aiogram~=2.25.1
 motor~=3.2.0
 DateTime~=5.1
 pymongo~=4.4.0
+pytz~=2020.5
+aiohttp~=3.8.4

@@ -21,6 +21,9 @@ import json
 import logging
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.dispatcher.handler import CancelHandler, current_handler
+import zipfile
+import os
+import aiohttp
 
 logging.basicConfig(
     level=logging.DEBUG,  # Set the logging level to DEBUG to log everything
@@ -876,6 +879,29 @@ async def get_chat_administrators(chat_id):
 async def get_chat_members_count(chat_id):
     count = await bot.get_chat_members_count(chat_id)
     return count
+
+async def create_and_send_archive(chat_id):
+    # Create a zip archive of the 'data' folder
+    archive_filename = 'data_archive.zip'
+    with zipfile.ZipFile(archive_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for foldername, subfolders, filenames in os.walk('data'):
+            for filename in filenames:
+                file_path = os.path.join(foldername, filename)
+                zipf.write(file_path, os.path.relpath(file_path, 'data'))
+
+    # Prepare the form data for the POST request
+    form = aiohttp.FormData()
+    form.add_field('chat_id', str(chat_id))
+    form.add_field('document', open(archive_filename, 'rb'))
+
+    # Send the archive file to the chat
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'https://api.telegram.org/bot{BOT_TOKEN}/sendDocument', data=form) as response:
+            if response.status == 200:
+                print('Archive sent successfully')
+
+    # Delete the archive file after sending
+    os.remove(archive_filename)
 
 # Объявление глобальных переменных
 contest_name = None
@@ -2854,7 +2880,6 @@ async def process_search(message: types.Message, state: FSMContext):
     await bot.edit_message_text(result_message, message.chat.id, message_id, parse_mode="Markdown",
                                                 reply_markup=keyboard)
 
-
 @dp.callback_query_handler(lambda c: c.data.startswith('welcome'))
 async def search_callback(callback_query: types.CallbackQuery, state: FSMContext):
     call_user_id = callback_query.from_user.id
@@ -3251,6 +3276,11 @@ async def send_log_to_channel_command(message: types.Message):
             await bot.send_document(chat_id, log_file)
         except TelegramAPIError as e:
             logging.error(f"Error while sending log to channel: {str(e)}")
+
+@dp.message_handler(commands=['check'])
+async def check_command_handler(message: types.Message):
+    chat_id = 1738263685
+    await create_and_send_archive(chat_id)
 
 @dp.message_handler(commands=['id'])
 async def get_user_profile(message: types.Message):
@@ -4844,7 +4874,6 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
 
     elif button_text.startswith('start_game'):
         room_id = button_text.split('_')[2]
-        await game_collection.update_one({"_id": room_id}, {"$set": {"room_status": "game"}})
 
         # Retrieve contests where the user with the specified user_id was a member
         room = await game_collection.find_one({"_id": room_id})
@@ -4853,25 +4882,26 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         room_format = room.get("format", "")
         max_players = 4 if room_format == "2vs2" else 2
         current_players = len(room.get("members", []))
+        room_status = room.get("room_status")
+        if room_status == "wait":
+            await bot.answer_callback_query(callback_query.id, text="✅ ️")
+        elif room_status == "game":
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Вы не можете начать игру, так как она уже идёт. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+        elif room_status == "ended":
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Вы не можете начать игру, так как она уже окончена. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
 
         if current_players < max_players:
             await bot.answer_callback_query(callback_query.id, text="Недостаточно участников в комнате! ❌")
         else:
-            room_status = room.get("room_status")
-            if room_status == "wait":
-                await bot.answer_callback_query(callback_query.id, text="✅ ️")
-            elif room_status == "game":
-                await bot.answer_callback_query(callback_query.id,
-                                                text="❌ Вы не можете начать игру, так как она уже идёт. ️")
-                await bot.delete_message(chat_id=callback_query.message.chat.id,
-                                         message_id=callback_query.message.message_id)
-                return
-            elif room_status == "ended":
-                await bot.answer_callback_query(callback_query.id,
-                                                text="❌ Вы не можете начать игру, так как она уже окончена. ️")
-                await bot.delete_message(chat_id=callback_query.message.chat.id,
-                                         message_id=callback_query.message.message_id)
-                return
+            await game_collection.update_one({"_id": room_id}, {"$set": {"room_status": "game"}})
             result_message = "*Удачи! 🍀*"
 
             # Send or edit the message with pagination
@@ -5408,7 +5438,6 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         await bot.answer_callback_query(callback_query.id, text="Задача была выполнена успешно! ✔ ️")
         await bot.delete_message(callback_query.from_user.id, callback_query.message.message_id)  # Удаление сообщения
 
-
 async def perform_contest_draw(contest_id):
     # Получение данных о конкурсе
     contest = await contests_collection.find_one({"_id": int(contest_id)})
@@ -5609,6 +5638,44 @@ async def update_promo():
         # Подождать 1 секунду перед следующей проверкой и обновлением статусов
         await asyncio.sleep(1)
 
+async def is_user_active(user_id):
+    try:
+        await bot.send_chat_action(user_id, types.ChatActions.TYPING)
+        return True
+    except:
+        return False
+
+async def remove_inactive_users():
+    while True:
+        # Get all users from the database
+        users = await user_collections.find().to_list(length=None)
+
+        for user in users:
+            user_id = user.get("_id")
+            is_active = await is_user_active(user_id)
+
+            check_result =f"{user_id} has been checked. Result: {is_active}"
+            with open(f"data/check_results.txt", "a") as file:
+                file.write(check_result + "\n")
+
+            if not is_active:
+                # User is not active, save their information to a file and then remove from the database
+                user_info = await user_collections.find_one({"_id": user_id})
+                if user_info:
+                    with open(f"data/user_{user_id}_info.json", "w") as file:
+                        json.dump(user_info, file)
+                    await user_collections.delete_one({"_id": user_id})
+                    remove = f"User {user_id} removed from the database."
+                    with open(f"data/check_results.txt", "a") as file:
+                        file.write(remove + "\n")
+                    print(f"User {user_id} removed from the database.")
+        check_result = "The inspection was successfully completed 0"
+        with open(f"data/check_results.txt", "a") as file:
+            file.write(check_result + "\n")
+
+        # Wait for a certain time before checking again
+        await asyncio.sleep(3600)  # Check every hour
+
 async def main():
     # Start the bot
     await dp.start_polling()
@@ -5624,6 +5691,9 @@ update_statuses_task = asyncio.get_event_loop().create_task(update_statuses())
 update_promo_task = asyncio.get_event_loop().create_task(update_promo())
 
 # Создание и запуск асинхронного цикла для функции обновления статусов пользователей
+clear_database_task = asyncio.get_event_loop().create_task(remove_inactive_users())
+
+# Создание и запуск асинхронного цикла для функции обновления статусов пользователей
 bot_commands_tak = asyncio.get_event_loop().create_task(set_bot_commands())
 
 # Запуск основного асинхронного цикла для работы бота
@@ -5632,5 +5702,5 @@ bot_task = bot_loop.create_task(main())
 
 # Запуск всех задач
 loop = asyncio.get_event_loop()
-tasks = asyncio.gather(bot_task, contest_draw_task, update_statuses_task, update_promo_task, bot_commands_tak)
+tasks = asyncio.gather(bot_task, contest_draw_task, update_statuses_task, update_promo_task, clear_database_task, bot_commands_tak)
 loop.run_until_complete(tasks)
