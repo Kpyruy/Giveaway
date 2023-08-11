@@ -973,7 +973,7 @@ async def play_command(message: types.Message):
 
     # Check if there are any arguments after the command
     if message.chat.type != 'private':
-        await bot.send_message(message.chat.id, "*❌ Команда /create доступна только в личных сообщениях.*", parse_mode="Markdown")
+        await bot.send_message(message.chat.id, "*❌ Команда /play доступна только в личных сообщениях.*", parse_mode="Markdown")
         return
 
     # Get the game_id from the arguments
@@ -4857,6 +4857,21 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
         if current_players < max_players:
             await bot.answer_callback_query(callback_query.id, text="Недостаточно участников в комнате! ❌")
         else:
+            room_status = room.get("room_status")
+            if room_status == "wait":
+                await bot.answer_callback_query(callback_query.id, text="✅ ️")
+            elif room_status == "game":
+                await bot.answer_callback_query(callback_query.id,
+                                                text="❌ Вы не можете начать игру, так как она уже идёт. ️")
+                await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                         message_id=callback_query.message.message_id)
+                return
+            elif room_status == "ended":
+                await bot.answer_callback_query(callback_query.id,
+                                                text="❌ Вы не можете начать игру, так как она уже окончена. ️")
+                await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                         message_id=callback_query.message.message_id)
+                return
             result_message = "*Удачи! 🍀*"
 
             # Send or edit the message with pagination
