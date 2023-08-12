@@ -1187,7 +1187,55 @@ async def start_command(message: types.Message):
         # Код для нового пользователя
         contest_id = message.get_args()
         if contest_id:
-            contest = await contests_collection.find_one({"_id": contest_id})
+            try:
+                contest = await contests_collection.find_one({"_id": int(contest_id)})
+            except Exception as e:
+                game_id = message.get_args()
+                # Check if the game with the specified game_id exists in the database
+                game = await game_collection.find_one({"_id": game_id})
+                if game is None:
+                    await message.reply("*❌ Ничего не найдено. Пожалуйста, используйте правильный ID.*",
+                                        parse_mode="Markdown")
+                    return
+
+                # Check if the format of the game is either 2vs2 or 1vs1
+                game_format = game.get("format", "")
+                if game_format not in ["2vs2", "1vs1"]:
+                    await message.reply("`Invalid game format. The game format should be either 2vs2 or 1vs1.`\n\n"
+                                        "*🛑 Отправьте это сообщение с ошибкой разработичку бота!*",
+                                        parse_mode="Markdown")
+                    return
+
+                # Add the player to the members array of the game
+                user_id = message.from_user.id
+                if user_id in game.get("members", []):
+                    keyboard = types.InlineKeyboardMarkup()
+                    info_room = types.InlineKeyboardButton(text='Открыть 🖥️', callback_data=f'info_room_{game_id}')
+                    keyboard.row(info_room)
+                    await message.reply("*❌ Вы уже добавлены в эту комнату.*", parse_mode="Markdown",
+                                        reply_markup=keyboard)
+                    return
+
+                # Check if the game already has the maximum number of players based on its format
+                max_players = 4 if game_format == "2vs2" else 2
+                current_players = len(game.get("members", []))
+                if current_players == max_players:
+                    await message.reply("*🖥️ В комнате уже максимальное количество участников.*", parse_mode="Markdown")
+                    return
+
+                game["members"] = game.get("members", []) + [user_id]
+                await user_collections.update_one({"_id": user_id}, {"$inc": {"game_participation": 1}})
+
+                # Save the updated game back to the database
+                await game_collection.replace_one({"_id": game_id}, game)
+                keyboard = types.InlineKeyboardMarkup()
+                info_room = types.InlineKeyboardButton(text='Открыть 🖥️', callback_data=f'info_room_{game_id}')
+                keyboard.row(info_room)
+
+                await message.reply(
+                    f"*☑️ Вы успешно были добавлены ID* `{game_id}`*!*\n\n*⌛ Ожидайте начала игры. Её запускает создатель комнаты.️.*",
+                    parse_mode="Markdown", reply_markup=keyboard)
+                return
             if contest:
                 if user_id in contest['members']:
                     # Пользователь уже зарегистрирован в конкурсе
