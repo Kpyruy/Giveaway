@@ -114,7 +114,7 @@ async def generate_start_link(contest_id):
 
 async def generate_room_link(room_id):
     bot_username = await get_bot_username()
-    play_link = f"t.me/{bot_username}?play={room_id}"
+    play_link = f"t.me/{bot_username}?start={room_id}"
     return play_link
 
 def generate_room_id(length=16):
@@ -1061,10 +1061,53 @@ async def start_command(message: types.Message):
             try:
                 contest = await contests_collection.find_one({"_id": int(contest_id)})
             except Exception as e:
-                # Код, если конкурс с указанной ссылкой не найден
-                await message.reply("*К сожалению, такого конкурса не существует. ❌*",
-                                                   parse_mode="Markdown")
+                game_id = message.get_args()
+                # Check if the game with the specified game_id exists in the database
+                game = await game_collection.find_one({"_id": game_id})
+                if game is None:
+                    await message.reply("*❌ Ничего не найдено. Пожалуйста, используйте правильный ID.*",
+                                        parse_mode="Markdown")
+                    return
+
+                # Check if the format of the game is either 2vs2 or 1vs1
+                game_format = game.get("format", "")
+                if game_format not in ["2vs2", "1vs1"]:
+                    await message.reply("`Invalid game format. The game format should be either 2vs2 or 1vs1.`\n\n"
+                                        "*🛑 Отправьте это сообщение с ошибкой разработичку бота!*",
+                                        parse_mode="Markdown")
+                    return
+
+                # Add the player to the members array of the game
+                user_id = message.from_user.id
+                if user_id in game.get("members", []):
+                    keyboard = types.InlineKeyboardMarkup()
+                    info_room = types.InlineKeyboardButton(text='Открыть 🖥️', callback_data=f'info_room_{game_id}')
+                    keyboard.row(info_room)
+                    await message.reply("*❌ Вы уже добавлены в эту комнату.*", parse_mode="Markdown",
+                                        reply_markup=keyboard)
+                    return
+
+                # Check if the game already has the maximum number of players based on its format
+                max_players = 4 if game_format == "2vs2" else 2
+                current_players = len(game.get("members", []))
+                if current_players == max_players:
+                    await message.reply("*🖥️ В комнате уже максимальное количество участников.*", parse_mode="Markdown")
+                    return
+
+                game["members"] = game.get("members", []) + [user_id]
+                await user_collections.update_one({"_id": user_id}, {"$inc": {"game_participation": 1}})
+
+                # Save the updated game back to the database
+                await game_collection.replace_one({"_id": game_id}, game)
+                keyboard = types.InlineKeyboardMarkup()
+                info_room = types.InlineKeyboardButton(text='Открыть 🖥️', callback_data=f'info_room_{game_id}')
+                keyboard.row(info_room)
+
+                await message.reply(
+                    f"*☑️ Вы успешно были добавлены ID* `{game_id}`*!*\n\n*⌛ Ожидайте начала игры. Её запускает создатель комнаты.️.*",
+                    parse_mode="Markdown", reply_markup=keyboard)
                 return
+
             if contest:
                 ended = contest.get("ended")  # Проверяем значение параметра "ended", по умолчанию False
                 owner_id = contest.get("owner_id")
@@ -3568,17 +3611,25 @@ async def create_game_room(callback_query: types.CallbackQuery):
             await create_gameroom(room_id, user_id, type_choice, format_choice, rounds, create_date, room_link)
 
             # Create the confirmation message with the formatted room_link
-            confirmation_message = f"*☑️ Комната успешно создана!*\n\n" \
+            confirmation_message = f"*🏞️ Информация о комнате*\n\n" \
                                    f"*🔘 ID Комнаты:* `{room_id}`\n" \
                                    f"*🛒 Игра:* `{type_choice}`\n" \
                                    f"*👥 Формат:* `{format_choice}`\n" \
                                    f"*🔄 Количество раундов:* `{rounds}`\n" \
                                    f"*🗓️ Дата создания:* `{create_date}`\n\n" \
-                                   f"*🔗 Логин в комнату:* `/play {room_id}`"
+                                   f"*🔗 Логин в комнату:* `{room_link}`"
+
+            await game_collection.update_one({"_id": room_id}, {"$push": {"members": user_id}})
+            await user_collections.update_one({"_id": user_id}, {"$inc": {"game_participation": 1}})
+            keyboard = types.InlineKeyboardMarkup()
+            info_room = types.InlineKeyboardButton(text='Открыть 🖥️', callback_data=f'info_room_{room_id}')
+            keyboard.row(info_room)
 
         # Send the formatted confirmation message with the clickable link
         await bot.edit_message_text(confirmation_message, callback_query.message.chat.id,
                                     callback_query.message.message_id, parse_mode="Markdown")
+        await bot.send_message(callback_query.message.chat.id, f"*☑️ Создание произошло успешно:* `{room_id}`*, приятного время провождения!*", parse_mode="Markdown", reply_markup=keyboard)
+
     else:
         # Handle the case when there are not enough elements in the list
         error_message = "❌ Error: Invalid data format in callback query."
