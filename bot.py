@@ -4742,6 +4742,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             number = 0
             # Create the message containing the user history for the current page
             result_message = f"*🖥️ Ваши комнаты:*\n\n"
+            keyboard = types.InlineKeyboardMarkup()
             for game in active_games:
                 # Increment the room number for the next iteration
                 number += 1
@@ -4750,7 +4751,12 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                 result_message += f"*🛒 Игра:* `{game['type']}`\n"
                 result_message += f"*🏁 Количество участников:* `{len(game['members'])}`\n"
                 result_message += f"*🗓️ Дата создания:* `{game['create_date']}`\n\n"
-            keyboard = types.InlineKeyboardMarkup()
+                # Создаем кнопку
+                contest_button = types.InlineKeyboardButton(text=f"{game['_id']} {game['type']}",
+                                                            callback_data=f"info_room_{game['_id']}")
+                # Добавляем кнопку в клавиатуру
+                keyboard.row(contest_button)
+
             back = types.InlineKeyboardButton(text='Назад 🥏', callback_data='create_back')
             keyboard.row(back)
 
@@ -4857,15 +4863,18 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             result_message += f"*🏁 Количество участников:* `{len(room['members'])}`\n"
             result_message += f"*🗓️ Дата создания:* `{room['create_date']}`\n\n"
             keyboard = types.InlineKeyboardMarkup()
+            game_settings = types.InlineKeyboardButton(text='Управление ⚙️', callback_data=f'game_settings_{room_id}')
             game_members = types.InlineKeyboardButton(text='Посмотреть участников 👥', callback_data=f'game_members_{room_id}')
-            keyboard.row(game_members)
 
             if int(user_id) == room["owner_id"]:
                 start_game = types.InlineKeyboardButton(text='Начать ✅', callback_data=f'start_game_{room_id}')
+                keyboard.row(game_settings)
+                keyboard.row(game_members)
                 keyboard.row(start_game)
             else:
                 leave_room = types.InlineKeyboardButton(text='Покинуть комнату ❌',
                                                         callback_data=f'leave_room_{room_id}')
+                keyboard.row(game_members)
                 keyboard.row(leave_room)
 
             # Send or edit the message with pagination
@@ -4883,10 +4892,371 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                                                 callback_query.message.message_id, parse_mode="Markdown",
                                                 reply_markup=keyboard)
 
+    elif button_text.startswith('game_settings'):
+        room_id = button_text.split('_')[2]
+
+        try:
+            # Retrieve contests where the user with the specified user_id was a member
+            room = await game_collection.find_one({"_id": room_id})
+        except Exception:
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Комната была удалена. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+
+        room_status = room.get("room_status")
+        if room_status == "wait":
+                pass
+        elif room_status == "game":
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Вы не можете управлять комнатой, так как сейчас идёт игра. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+        elif room_status == "ended":
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Вы не можете управлять комнатой, так как она закрыта. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+
+        if room:
+            # Create the message containing the user history for the current page
+            result_message = f"*🖥️ Информация о комнате:*\n\n"
+            # Increment the room number for the next iteration
+            result_message += f"*🔘 ID Комнаты:* `{room['_id']}`\n"
+            result_message += f"*🛒 Игра:* `{room['type']}`\n"
+            result_message += f"*👥 Формат:* `{room['format']}`\n"
+            result_message += f"*🔄 Количество раундов:* `{room['rounds']}`\n"
+            result_message += f"*🏁 Количество участников:* `{len(room['members'])}`\n"
+            result_message += f"*🗓️ Дата создания:* `{room['create_date']}`\n\n"
+
+            keyboard = types.InlineKeyboardMarkup()
+            room_delete_check = types.InlineKeyboardButton(text='Удалить 🗑️', callback_data=f'room_delete_check_{room_id}')
+            room_change = types.InlineKeyboardButton(text='Изменить 💧', callback_data=f'room_change_room_{room_id}')
+            back = types.InlineKeyboardButton(text='Назад 🥏', callback_data=f'info_room_{room_id}')
+            keyboard.row(room_change)
+            keyboard.row(room_delete_check)
+            keyboard.row(back)
+
+            # Send or edit the message with pagination
+            await bot.edit_message_text(result_message, callback_query.message.chat.id,
+                                                callback_query.message.message_id, parse_mode="Markdown",
+                                                reply_markup=keyboard)
+        else:
+            result_message = "*❌ Произошла ошибка.*"
+            keyboard = types.InlineKeyboardMarkup()
+            back = types.InlineKeyboardButton(text='Закрыть ☑️️', callback_data='done')
+            keyboard.row(back)
+
+            # Send or edit the message with pagination
+            await bot.edit_message_text(result_message, callback_query.message.chat.id,
+                                                callback_query.message.message_id, parse_mode="Markdown",
+                                                reply_markup=keyboard)
+
+    elif button_text.startswith('room_delete_check'):
+        room_id = button_text.split('_')[3]
+
+        try:
+            # Retrieve contests where the user with the specified user_id was a member
+            room = await game_collection.find_one({"_id": room_id})
+        except Exception:
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Комната была удалена. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+
+        room_status = room.get("room_status")
+        if room_status == "wait":
+            pass
+        elif room_status == "game":
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Вы не можете управлять комнатой, так как сейчас идёт игра. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+        elif room_status == "ended":
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Вы не можете управлять комнатой, так как она закрыта. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+
+        confirmation_text = f"*🖥️ Вы уверены что хотите удалить комнату* `{room_id}`*?*"
+        keyboard = types.InlineKeyboardMarkup()
+        confirm = types.InlineKeyboardButton(text='Подтвердить ✅', callback_data=f'confirm_del_room_{room_id}')
+        decline = types.InlineKeyboardButton(text='Отмена ❌', callback_data=f'info_room_{room_id}')
+        keyboard.row(decline, confirm)
+
+        await bot.edit_message_text(confirmation_text, callback_query.message.chat.id, callback_query.message.message_id,
+                                    parse_mode="Markdown", reply_markup=keyboard)
+
+    elif button_text.startswith('confirm_del_room'):
+        room_id = button_text.split('_')[3]
+
+        try:
+            # Retrieve contests where the user with the specified user_id was a member
+            room = await game_collection.find_one({"_id": room_id})
+        except Exception:
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Комната была удалена. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+
+        room_status = room.get("room_status")
+        if room_status == "wait":
+            pass
+        elif room_status == "game":
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Вы не можете управлять комнатой, так как сейчас идёт игра. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+        elif room_status == "ended":
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Вы не можете управлять комнатой, так как она закрыта. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+
+        result_message = "*❗ Ваша комната была успешно удалена.*"
+        await game_collection.delete_one({"_id": room_id})
+
+        await bot.edit_message_text(result_message, callback_query.message.chat.id, callback_query.message.message_id,
+                                    parse_mode="Markdown", reply_markup=keyboard)
+
+    elif button_text.startswith('room_change'):
+        tag = button_text.split('_')[2]
+        room_id = button_text.split('_')[3]
+
+        try:
+            # Retrieve contests where the user with the specified user_id was a member
+            room = await game_collection.find_one({"_id": room_id})
+        except Exception:
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Комната была удалена. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+
+        room_status = room.get("room_status")
+        if room_status == "wait":
+                pass
+        elif room_status == "game":
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Вы не можете управлять комнатой, так как сейчас идёт игра. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+        elif room_status == "ended":
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Вы не можете управлять комнатой, так как она закрыта. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+        keyboard = types.InlineKeyboardMarkup()
+
+        if tag == "room":
+            # Create the message containing the user history for the current page
+            result_message = f"*🖥️ Информация о комнате:*\n\n"
+            # Increment the room number for the next iteration
+            result_message += f"*🔘 ID Комнаты:* `{room['_id']}`\n"
+            result_message += f"*🛒 Игра:* `{room['type']}`\n"
+            result_message += f"*👥 Формат:* `{room['format']}`\n"
+            result_message += f"*🔄 Количество раундов:* `{room['rounds']}`\n"
+            result_message += f"*🏁 Количество участников:* `{len(room['members'])}`\n"
+            result_message += f"*🗓️ Дата создания:* `{room['create_date']}`\n\n"
+
+            room_change_game = types.InlineKeyboardButton(text='Игру 🛒', callback_data=f'room_change_game_{room_id}')
+            room_change_format = types.InlineKeyboardButton(text='Формат 👥',
+                                                            callback_data=f'room_change_format_{room_id}')
+            room_change_rounds = types.InlineKeyboardButton(text='Раунды 🔄',
+                                                            callback_data=f'room_change_rounds_{room_id}')
+            back = types.InlineKeyboardButton(text='Назад 🥏', callback_data=f'game_settings_{room_id}')
+            keyboard.row(room_change_game, room_change_rounds)
+            keyboard.row(room_change_format)
+            keyboard.row(back)
+
+
+        elif tag == "game":
+            result_message = "*🛒 Выберите игру:*"
+
+            games = [
+                ("Кубик 🎲", "🎲"),
+                ("Дартс 🎯", "🎯"),
+                ("Баскетбол 🏀", "🏀"),
+                ("Футбол ⚽", "⚽"),
+                ("Боулинг 🎳", "🎳"),
+                ("Казино 🎰", "🎰")
+            ]
+
+            buttons = []
+            for game_name, emoji in games:
+                button = types.InlineKeyboardButton(text=game_name, callback_data=f'data_room_{tag}_{emoji}_{room_id}')
+                keyboard.row(button)
+            back = types.InlineKeyboardButton(text='Назад 🥏', callback_data=f'game_settings_{room_id}')
+
+            # Генерируем ряды клавиш с помощью списка кнопок
+            keyboard.row(back)
+
+        elif tag == "format":
+            result_message = "*👥 Выберите формат:*"
+
+            games = [
+                ("1vs1 👤", "1vs1"),
+                ("2vs2 👥", "2vs2")
+            ]
+
+            buttons = []
+            for game_name, emoji in games:
+                button = types.InlineKeyboardButton(text=game_name, callback_data=f'data_room_{tag}_{emoji}_{room_id}')
+                buttons.append(button)
+            back = types.InlineKeyboardButton(text='Назад 🥏', callback_data=f'game_settings_{room_id}')
+
+            # Генерируем ряды клавиш с помощью списка кнопок
+            keyboard.row(*buttons)
+            keyboard.row(back)
+
+        elif tag == "rounds":
+            result_message = "*👥 Выберите количество раундов:*"
+
+            games = [
+                ("1", 1),
+                ("2", 2),
+                ("3", 3),
+                ("4", 4),
+                ("5", 5)
+            ]
+
+            buttons = []
+            for game_name, emoji in games:
+                button = types.InlineKeyboardButton(text=game_name, callback_data=f'data_room_{tag}_{emoji}_{room_id}')
+                keyboard.row(button)
+            back = types.InlineKeyboardButton(text='Назад 🥏', callback_data=f'game_settings_{room_id}')
+
+            # Генерируем ряды клавиш с помощью списка кнопок
+            keyboard.row(back)
+        else:
+            result_message = "*❌ Произошла ошибка.*"
+            keyboard = types.InlineKeyboardMarkup()
+            back = types.InlineKeyboardButton(text='Закрыть ☑️️', callback_data='done')
+            keyboard.row(back)
+
+        # Send or edit the message with pagination
+        await bot.edit_message_text(result_message, callback_query.message.chat.id,
+                                                callback_query.message.message_id, parse_mode="Markdown",
+                                                reply_markup=keyboard)
+
+    elif button_text.startswith('data_room'):
+        tag = button_text.split('_')[2]
+        data = button_text.split('_')[3]
+        room_id = button_text.split('_')[4]
+
+        try:
+            # Retrieve contests where the user with the specified user_id was a member
+            room = await game_collection.find_one({"_id": room_id})
+        except Exception:
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Комната была удалена. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+
+        game_type = None
+        room_format = None
+        room_rounds = None
+
+        room_status = room.get("room_status")
+        if room_status == "wait":
+                pass
+        elif room_status == "game":
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Вы не можете изменять что-либо в комнате, так как сейчас идёт игра. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+        elif room_status == "ended":
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Вы не можете изменять что-либо в комнате, так как она закрыта. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
+
+        if tag == "game":
+            await game_collection.update_one({"_id": room_id}, {"$set": {"type": data}}, upsert=True)
+            game_type = data
+            await bot.answer_callback_query(callback_query.id,
+                                            text=f"✅ Игра была успешно изменена на {data}. ️")
+
+        elif tag == "format":
+            await game_collection.update_one({"_id": room_id}, {"$set": {"format": data}}, upsert=True)
+            room_format = data
+            await bot.answer_callback_query(callback_query.id,
+                                            text=f"✅ Формат был успешно изменен на {data}. ️")
+
+        elif tag == "rounds":
+            await game_collection.update_one({"_id": room_id}, {"$set": {"rounds": int(data)}}, upsert=True)
+            room_rounds = data
+            await bot.answer_callback_query(callback_query.id,
+                                            text=f"✅ Количество раундов было успешно изменено на {data}. ️")
+        else:
+            result_message = "*❌ Произошла ошибка.*"
+            keyboard = types.InlineKeyboardMarkup()
+            back = types.InlineKeyboardButton(text='Закрыть ☑️️', callback_data='done')
+            keyboard.row(back)
+
+        if game_type is None:
+            game_type = room['type']
+
+        if room_format is None:
+            room_format = room['format']
+
+        if room_rounds is None:
+            room_rounds = room['rounds']
+
+        keyboard = types.InlineKeyboardMarkup()
+        # Create the message containing the user history for the current page
+        result_message = f"*🖥️ Информация о комнате:*\n\n"
+        # Increment the room number for the next iteration
+        result_message += f"*🔘 ID Комнаты:* `{room['_id']}`\n"
+        result_message += f"*🛒 Игра:* `{game_type}`\n"
+        result_message += f"*👥 Формат:* `{room_format}`\n"
+        result_message += f"*🔄 Количество раундов:* `{room_rounds}`\n"
+        result_message += f"*🏁 Количество участников:* `{len(room['members'])}`\n"
+        result_message += f"*🗓️ Дата создания:* `{room['create_date']}`\n\n"
+
+        room_change_game = types.InlineKeyboardButton(text='Игру 🛒', callback_data=f'room_change_game_{room_id}')
+        room_change_format = types.InlineKeyboardButton(text='Формат 👥',
+                                                        callback_data=f'room_change_format_{room_id}')
+        room_change_rounds = types.InlineKeyboardButton(text='Раунды 🔄',
+                                                        callback_data=f'room_change_rounds_{room_id}')
+        back = types.InlineKeyboardButton(text='Назад 🥏', callback_data=f'game_settings_{room_id}')
+        keyboard.row(room_change_game, room_change_rounds)
+        keyboard.row(room_change_format)
+        keyboard.row(back)
+
+        # Send or edit the message with pagination
+        await bot.edit_message_text(result_message, callback_query.message.chat.id,
+                                                callback_query.message.message_id, parse_mode="Markdown",
+                                                reply_markup=keyboard)
+
     elif button_text.startswith('leave_room'):
 
         user_id = callback_query.from_user.id
         room_id = button_text.split('_')[2]
+
+        try:
+            # Retrieve contests where the user with the specified user_id was a member
+            room = await game_collection.find_one({"_id": room_id})
+        except Exception:
+            await bot.answer_callback_query(callback_query.id,
+                                            text="❌ Комната была удалена. ️")
+            await bot.delete_message(chat_id=callback_query.message.chat.id,
+                                     message_id=callback_query.message.message_id)
+            return
 
         # Retrieve the room using the room_id
         room = await game_collection.find_one({"_id": room_id})
@@ -5344,11 +5714,11 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
     elif button_text.startswith('game_wins'):
         user_id = button_text.split('_')[2]
         click_user_id = callback_query.from_user.id
-        await bot.answer_callback_query(callback_query.id, text="⌛ Загружаю топ...")
 
         if int(user_id) != click_user_id:
             await bot.answer_callback_query(callback_query.id, text="❌ Увы эта кнопка не ваша, а так хотелось...")
             return
+        await bot.answer_callback_query(callback_query.id, text="⌛ Загружаю топ...")
 
         user_data = await user_collections.find_one({"_id": int(user_id)})
         user_wins = user_data.get("game_wins", 0)
@@ -5394,11 +5764,11 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
     elif button_text.startswith('game_participation'):
         user_id = button_text.split('_')[2]
         click_user_id = callback_query.from_user.id
-        await bot.answer_callback_query(callback_query.id, text="⌛ Загружаю топ...")
 
         if int(user_id) != click_user_id:
             await bot.answer_callback_query(callback_query.id, text="❌ Увы эта кнопка не ваша, а так хотелось...")
             return
+        await bot.answer_callback_query(callback_query.id, text="⌛ Загружаю топ...")
 
         # Retrieve the user's status from the user_collections
         user_data = await user_collections.find_one({"_id": int(user_id)})
@@ -5441,11 +5811,11 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
     elif button_text.startswith('wins'):
         profile_user_id = button_text.split('_')[1]
         click_user_id = callback_query.from_user.id
-        await bot.answer_callback_query(callback_query.id, text="⌛ Загружаю топ...")
 
         if int(profile_user_id) != click_user_id:
             await bot.answer_callback_query(callback_query.id, text="❌ Увы эта кнопка не ваша, а так хотелось...")
             return
+        await bot.answer_callback_query(callback_query.id, text="⌛ Загружаю топ...")
 
         # Retrieve the user's status from the user_collections
         user_data = await user_collections.find_one({"_id": int(profile_user_id)})
@@ -5490,11 +5860,11 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
     elif button_text.startswith('participation'):
         profile_user_id = button_text.split('_')[1]
         click_user_id = callback_query.from_user.id
-        await bot.answer_callback_query(callback_query.id, text="⌛ Загружаю топ...")
 
         if int(profile_user_id) != click_user_id:
             await bot.answer_callback_query(callback_query.id, text="❌ Увы эта кнопка не ваша, а так хотелось...")
             return
+        await bot.answer_callback_query(callback_query.id, text="⌛ Загружаю топ...")
 
         # Retrieve the user's status from the user_collections
         user_data = await user_collections.find_one({"_id": int(profile_user_id)})
@@ -5790,7 +6160,7 @@ update_statuses_task = asyncio.get_event_loop().create_task(update_statuses())
 update_promo_task = asyncio.get_event_loop().create_task(update_promo())
 
 # Создание и запуск асинхронного цикла для функции обновления статусов пользователей
-clear_database_task = asyncio.get_event_loop().create_task(remove_inactive_users())
+# clear_database_task = asyncio.get_event_loop().create_task(remove_inactive_users())
 
 # Создание и запуск асинхронного цикла для функции обновления статусов пользователей
 bot_commands_tak = asyncio.get_event_loop().create_task(set_bot_commands())
@@ -5801,5 +6171,5 @@ bot_task = bot_loop.create_task(main())
 
 # Запуск всех задач
 loop = asyncio.get_event_loop()
-tasks = asyncio.gather(bot_task, contest_draw_task, update_statuses_task, update_promo_task, clear_database_task, bot_commands_tak)
+tasks = asyncio.gather(bot_task, contest_draw_task, update_statuses_task, update_promo_task, bot_commands_tak)
 loop.run_until_complete(tasks)
