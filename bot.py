@@ -4973,13 +4973,13 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             pass
         elif room_status == "game":
             await bot.answer_callback_query(callback_query.id,
-                                            text="❌ Вы не можете управлять комнатой, так как сейчас идёт игра. ️")
+                                            text="❌ Неа. ️")
             await bot.delete_message(chat_id=callback_query.message.chat.id,
                                      message_id=callback_query.message.message_id)
             return
         elif room_status == "ended":
             await bot.answer_callback_query(callback_query.id,
-                                            text="❌ Вы не можете управлять комнатой, так как она закрыта. ️")
+                                            text="❌ Увы, но нет. ️")
             await bot.delete_message(chat_id=callback_query.message.chat.id,
                                      message_id=callback_query.message.message_id)
             return
@@ -5011,16 +5011,27 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             pass
         elif room_status == "game":
             await bot.answer_callback_query(callback_query.id,
-                                            text="❌ Вы не можете управлять комнатой, так как сейчас идёт игра. ️")
+                                            text="❌ Нет, нельзя. ️")
             await bot.delete_message(chat_id=callback_query.message.chat.id,
                                      message_id=callback_query.message.message_id)
             return
         elif room_status == "ended":
             await bot.answer_callback_query(callback_query.id,
-                                            text="❌ Вы не можете управлять комнатой, так как она закрыта. ️")
+                                            text="❌ Уже поздно, комната удалена. ️")
             await bot.delete_message(chat_id=callback_query.message.chat.id,
                                      message_id=callback_query.message.message_id)
             return
+
+        members = room.get("members", [])
+
+        for user_id in members:
+            user = await user_collections.find_one({"_id": user_id})
+            game_participation = user.get("game_participation", 0)
+            if game_participation > 0:
+                # Убираем участие у пользователя
+                await user_collections.update_one({"_id": user_id}, {"$inc": {"game_participation": -1}})
+            else:
+                pass
 
         result_message = "*❗ Ваша комната была успешно удалена.*"
         await game_collection.delete_one({"_id": room_id})
