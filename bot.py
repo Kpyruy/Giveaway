@@ -135,7 +135,8 @@ async def create_contest(contest_id, user_id, contest_name, contest_description,
         "ban_members": [],
         "join_date": [],
         "start_link": start_link,
-        "ended": "False"
+        "ended": "False",
+        "visible": "True"
     })
 
 async def create_gameroom(room_id, user_id, type, formate, rounds, create_date, room_link):
@@ -3570,39 +3571,52 @@ async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery)
 @dp.callback_query_handler(lambda query: query.data.startswith('room_create'))
 async def choose_game_type_or_rounds(callback_query: types.CallbackQuery):
     format_choice = callback_query.data.split('_')[2]
-    game_types = {
-        '🎲': 'Кубик',
-        '🎯': 'Дартс',
-        '🏀': 'Баскетбол',
-        '⚽': 'Футбол',
-        '🎳': 'Боулинг',
-        '🎰': 'Казино',
-    }
-    if format_choice == '1vs1':
-        # Ask the user to select the game type for 1vs1 format
-        type_message = "*🎮 Выберите тип игры:*"
-        keyboard = types.InlineKeyboardMarkup()
-        for emoji, game_type in game_types.items():
+
+    type_message = "*🎮 Выберите тип игры:*"
+    keyboard = types.InlineKeyboardMarkup()
+
+    # Create pairs of buttons
+    pairs = [(('🎲', 'Кубик'), ('🎯', 'Дартс')),
+                 (('🏀', 'Баскетбол'), ('⚽', 'Футбол')),
+                 (('🎳', 'Боулинг'), ('🎰', 'Казино'))]
+
+    for pair in pairs:
+        row = []
+        for emoji, game_type in pair:
             callback_data = f'roomcreate_{format_choice}_{emoji}'
-            keyboard.add(types.InlineKeyboardButton(text=f'{emoji} {game_type}', callback_data=callback_data))
+            row.append(types.InlineKeyboardButton(text=f'{emoji} {game_type}', callback_data=callback_data))
+        keyboard.row(*row)
+    # continue_create = types.InlineKeyboardButton(text='Кастомные игры 🃏', callback_data=f'customcreate_{format_choice}')
+    # keyboard.row(continue_create)
 
-        await bot.edit_message_text(type_message, callback_query.message.chat.id,
-                                    callback_query.message.message_id, parse_mode="Markdown",
-                                    reply_markup=keyboard)
-
-    elif format_choice == '2vs2':
-        # Ask the user to select the game type for 2vs2 format
-        type_message = "*🎮 Выберите тип игры:*"
-        keyboard = types.InlineKeyboardMarkup()
-        for emoji, game_type in game_types.items():
-            callback_data = f'roomcreate_{format_choice}_{emoji}'
-            keyboard.add(types.InlineKeyboardButton(text=f'{emoji} {game_type}', callback_data=callback_data))
-
-        await bot.edit_message_text(type_message, callback_query.message.chat.id,
-                                    callback_query.message.message_id, parse_mode="Markdown",
-                                    reply_markup=keyboard)
+    await bot.edit_message_text(type_message, callback_query.message.chat.id,
+                                callback_query.message.message_id, parse_mode="Markdown",
+                                reply_markup=keyboard)
 
 @dp.callback_query_handler(lambda query: query.data.startswith('roomcreate_1vs1') or query.data.startswith('roomcreate_2vs2'))
+async def choose_game_type(callback_query: types.CallbackQuery):
+    format_and_type_choice = callback_query.data.split('_')[1:]
+
+    if len(format_and_type_choice) >= 2:
+        format_choice, type_choice = format_and_type_choice[0], format_and_type_choice[1]
+
+        # Ask the user to select the number of rounds
+        rounds_message = "*🔄 Выберите количество раундов (1, 2, 3, 4, 5):*"
+        keyboard = types.InlineKeyboardMarkup()
+        for rounds in range(1, 6):
+            emoji = format_choice  # Get the emoji from the format_choice variable
+            callback_data = f'createroom_{emoji}_{type_choice}_{rounds}'
+            keyboard.add(types.InlineKeyboardButton(text=str(rounds), callback_data=callback_data))
+
+        await bot.edit_message_text(rounds_message, callback_query.message.chat.id,
+                                    callback_query.message.message_id, parse_mode="Markdown",
+                                    reply_markup=keyboard)
+    else:
+        # Handle the case when there are not enough elements in the list
+        error_message = "❌ Error: Invalid data format in callback query."
+        await bot.send_message(user_id, error_message)
+
+@dp.callback_query_handler(lambda query: query.data.startswith('customcreate_1vs1') or query.data.startswith('customcreate_2vs2'))
 async def choose_game_type(callback_query: types.CallbackQuery):
     format_and_type_choice = callback_query.data.split('_')[1:]
 
@@ -3763,11 +3777,16 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
 
         async for contest in all_contests:
             contest_id = contest["_id"]
+            visible = contest["visible"]
             members_count = len(contest.get("members", []))
             ended = contest.get("ended")  # Проверяем значение параметра "ended", по умолчанию False
 
             if ended == "False":
-                message_text = f"*🍭 Конкурс:* `{contest_id}`\n*🏯 Количество участников:* `{members_count}`\n"
+                if visible == "False":
+                    name_contest = contest["contest_name"]
+                else:
+                    name_contest = contest_id
+                message_text = f"*🍭 Конкурс:* `{name_contest}`\n*🏯 Количество участников:* `{members_count}`\n"
                 active_drawings.append(message_text)
                 active_contests_found = True
 
@@ -5407,7 +5426,14 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             start_game_message = "<b>🎮 Игра началась!</b>\n\n"
             team_message = ""
 
-            for team_name, team_members in {"<b>🫑 Первая команда</b>": team1, "<b>🍏 Вторая команда</b>": team2}.items():
+            emojis = ["⚽️", "🏀", "🏈", "⚾️", "🎾", "⛳️", "🏉", "🎱", "🏓", "🏸", "🥊", "🏹", "🛹", "🥋", "🏄‍♂️", "🚴‍♂️", "⛷️",
+                      "🏂", "🏊‍♀️", "🤽‍♀️", "⛹️‍♂️", "🤺", "⛸️", "🎿", "🏒", "🥍", "🥏", "🥅", "⛩️", "🏋️‍♀️", "🤸‍♂️", "🧘‍♀️"]
+
+            # Выбор случайных эмодзи для первой и второй команды
+            first_emoji = random.choice(emojis)
+            second_emoji = random.choice([emoji for emoji in emojis if emoji != first_emoji])
+
+            for team_name, team_members in {f"<b>{first_emoji} Первая команда</b>": team1, f"<b>{second_emoji} Вторая команда</b>": team2}.items():
                 # Create a string for all members in a single team
                 members_string = ', '.join([f"@{await get_username(member)} <code>[{member}]</code>" for member in team_members])
                 team_message += "{}:\n{}\n\n".format(team_name, members_string)
@@ -5426,7 +5452,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                 for team in [team1, team2]:
                     for member in team:
                         # Send message to each member
-                        await bot.send_message(member, "*Летит! 🕊️*", parse_mode="Markdown")
+                        await bot.send_message(member, "*Кидаю! 🕊️*", parse_mode="Markdown")
                         basketball = await bot.send_dice(member, emoji=room["type"])
                         match_results[tuple(team)] += basketball['dice']['value']  # Record the result
                         team_scores[tuple(team)] += basketball['dice']['value']  # Update the team scores
@@ -5485,8 +5511,8 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                 if username:
                     username = username.replace("_", "&#95;")
                     team_names = {
-                        tuple(team1): "Первая команда",
-                        tuple(team2): "Вторая команда"
+                        tuple(team1): f"{first_emoji} Первая команда",
+                        tuple(team2): f"{second_emoji} Вторая команда"
                     }
 
                     team_scores_message = "\n".join([
