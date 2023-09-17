@@ -3777,7 +3777,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
 
         async for contest in all_contests:
             contest_id = contest["_id"]
-            visible = contest["visible"]
+            visible = contest.get("visible")
             members_count = len(contest.get("members", []))
             ended = contest.get("ended")  # Проверяем значение параметра "ended", по умолчанию False
 
