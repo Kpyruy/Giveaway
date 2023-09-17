@@ -4161,7 +4161,7 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
 
                     # Создаем кнопку для конкретного конкурса с эмодзи
                     contest_button = types.InlineKeyboardButton(text=f'{contest_id} {random_emoji} ',
-                                                                callback_data=f'contest_button_{contest_id}')
+                                                                callback_data=f'contest_button_{contest_id}_None')
                     # Добавляем кнопку в клавиатуру
                     keyboard.row(contest_button)
 
@@ -4186,10 +4186,30 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
     elif button_text.startswith('contest_button'):
 
         contest_id = button_text.split('_')[2]
+        visible_info = button_text.split('_')[3]
+        new_visible = None
 
         # Поиск конкурса по айди
         contest = await contests_collection.find_one({"_id": int(contest_id)})
         message_id = change_message_id[-1]
+
+        if visible_info == "None":
+            pass
+        elif visible_info == "visible":
+            visible = contest.get("visible")
+
+            # Инвертирование значения
+            if visible == "True":
+                new_visible = "False"
+            else:
+                new_visible = "True"
+
+            await contests_collection.update_one(
+                {"_id": int(contest_id)},
+                {"$set": {"visible": new_visible}}
+            )
+            await bot.answer_callback_query(callback_query.id, text="Видимость конкурса изменена 🫥 ️")
+
 
         if contest:
             # Извлечение необходимых данных из найденного конкурса
@@ -4199,6 +4219,10 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             winners = contest.get("winners")
             members = contest.get("members")
             end_date = contest.get("end_date")
+            if new_visible is None:
+                visible = contest.get("visible")
+            else:
+                visible = new_visible
 
             if members:
                 members_count = len(members)
@@ -4210,19 +4234,27 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
             else:
                 members_message = "0"
 
+            if visible == "True":
+                visible = "Доступен ✅"
+            else:
+                visible = "Скрыт ❌"
+
             result_message = f"*🏆 Редакция конкурса* `{contest_id}`*:*\n\n" \
                                 f"*🪁 Имя:* `{contest_name}`\n" \
                                 f"*🧊 Идентификатор:* `{contest_id}`\n" \
                                 f"*🎗️ Описание:* _{contest_description}_\n" \
                                 f"*🎖️ Количество победителей:* `{winners}`\n" \
                                 f"*🏯 Количество участников:* `{members_message}`\n" \
-                                f"*📆 Дата окончания:* `{end_date}`"
+                                f"*📆 Дата окончания:* `{end_date}`\n\n" \
+                                f"*🫥 Видимость:* `{visible}`"
 
             keyboard = types.InlineKeyboardMarkup()
+            contest_visible = types.InlineKeyboardButton(text='Видимость 🫥', callback_data=f'contest_button_{contest_id}_visible')
             contest_change = types.InlineKeyboardButton(text='Изменение 🥨', callback_data=f'contest_change_{contest_id}')
             winner = types.InlineKeyboardButton(text='Выбор победит. 🏆', callback_data=f'winner_refining_{contest_id}')
             members = types.InlineKeyboardButton(text='Участинки 🏯', callback_data=f'members_{contest_id}_None_1')
             back_search = types.InlineKeyboardButton(text='Назад 🧿', callback_data='change')
+            keyboard.row(contest_visible)
             keyboard.row(contest_change, winner)
             keyboard.row(members)
             keyboard.row(back_search)
