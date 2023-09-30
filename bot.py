@@ -5517,6 +5517,8 @@ async def button_click(callback_query: types.CallbackQuery, state: FSMContext):
                         if username:
                             username = username.replace("_", "&#95;")
                             winner_usernames.append(f"@{username} <b>—</b> <code>{user_id}</code>\n")
+                        else:
+                            winner_usernames.append(f"@None <b>—</b> <code>{user_id}</code>\n")
 
                         team_names = {
                             tuple(team1): "Первая команда",
