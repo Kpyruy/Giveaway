@@ -1560,12 +1560,25 @@ async def process_name(message: types.Message, state: FSMContext):
     # Удаление сообщения пользователя
     await bot.delete_message(message.chat.id, message.message_id)
 
+    # Получение всех существующих _id из коллекции
+    existing_ids = await contests_collection.distinct("_id")
+
     if not contest_name:
-        # Если имя конкурса не было введено, генерируем случайное имя
-        contest_name = str(random.randint(100000000, 999999999))
+        candidate_id = str(random.randint(100000000, 999999999))
+        while candidate_id in existing_ids:
+            candidate_id = str(random.randint(100000000, 999999999))
+
+        # Теперь у вас есть уникальный contest_id, который не совпадает с уже существующими _id
+        contest_id = candidate_id
+        contest_name = contest_id
 
     # Генерация случайного идентификатора конкурса
-    contest_id = str(random.randint(100000000, 999999999))
+    candidate_id = str(random.randint(100000000, 999999999))
+    while candidate_id in existing_ids:
+        candidate_id = str(random.randint(100000000, 999999999))
+
+    # Теперь у вас есть уникальный contest_id, который не совпадает с уже существующими _id
+    contest_id = candidate_id
 
     # Сохранение имени и идентификатора конкурса (например, в базе данных или переменных)
     await state.update_data(contest_name=contest_name)
@@ -1588,9 +1601,17 @@ async def process_name(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler(lambda query: query.data == 'skip_name', state=CreateContestState.name)
 async def skip_name_callback(query: types.CallbackQuery, state: FSMContext):
-    # Генерация случайного имени и идентификатора конкурса
-    contest_name = str(random.randint(100000000, 999999999))
-    contest_id = contest_name
+    # Получение всех существующих _id из коллекции
+    existing_ids = await contests_collection.distinct("_id")
+
+    # Генерация случайного _id, который не совпадает с существующими
+    candidate_id = str(random.randint(100000000, 999999999))
+    while candidate_id in existing_ids:
+        candidate_id = str(random.randint(100000000, 999999999))
+
+    # Теперь у вас есть уникальный contest_id, который не совпадает с уже существующими _id
+    contest_id = candidate_id
+    contest_name = contest_id
 
     # Сохранение имени и идентификатора конкурса (например, в базе данных или переменных)
     await state.update_data(contest_name=contest_name)
@@ -2924,83 +2945,6 @@ async def search_callback(callback_query: types.CallbackQuery, state: FSMContext
                                 parse_mode="Markdown", reply_markup=keyboard)
     await ChangeContestState.date_change.set()
     await state.update_data(contest_id=contest_id)
-    await state.update_data(prev_message_id=callback_query.message.message_id)
-
-# Изменение welcome message
-@dp.callback_query_handler(text='decline_welcome', state=MenuCategories.welcome)
-async def decline_search_callback(callback_query: types.CallbackQuery, state: FSMContext):
-    chat_id = (await state.get_data()).get('chat_id')
-    user_id = callback_query.from_user.id
-    await callback_query.answer()
-    await state.finish()
-    keyboard = types.InlineKeyboardMarkup()
-    not_back = types.InlineKeyboardButton(text='Остаться ✏️',
-                                      callback_data=f'welcome_{chat_id}_{user_id}')
-    back = types.InlineKeyboardButton(text='Вернуться 📘',
-                                      callback_data=f'group_{chat_id}_{user_id}_edit')
-    keyboard.row(back, not_back)
-    result_message = "*💬 Вы уверены что хотите отменить изменение приветственного сообщения?*"
-    await bot.edit_message_text(result_message, callback_query.message.chat.id, callback_query.message.message_id,
-                                            parse_mode="Markdown",
-                                            reply_markup=keyboard)
-
-@dp.message_handler(state=MenuCategories.welcome)
-async def process_search(message: types.Message, state: FSMContext):
-    await bot.delete_message(message.chat.id, message.message_id)
-
-    chat_id = (await state.get_data()).get('chat_id')
-    message_id = (await state.get_data()).get('message_id')
-    await state.finish()
-
-    user_id = message.from_user.id
-
-    new_welcome = message.text
-
-    await groups_collection.update_one({"_id": int(chat_id)},
-                                      {"$set": {"welcome": new_welcome}})
-    # Поиск конкурса по айди
-    group = await groups_collection.find_one({"_id": int(chat_id)})
-
-    welcome = group.get("welcome")
-    result_message = "*✅ Новое приветственное сообщение:*\n" \
-                     f"{welcome}"
-
-    keyboard = types.InlineKeyboardMarkup()
-    back = types.InlineKeyboardButton(text='Назад 📘', callback_data=f'group_{chat_id}_{user_id}')
-    keyboard.row(back)
-
-    await bot.edit_message_text(result_message, message.chat.id, message_id, parse_mode="Markdown",
-                                                reply_markup=keyboard)
-
-@dp.callback_query_handler(lambda c: c.data.startswith('welcome'))
-async def search_callback(callback_query: types.CallbackQuery, state: FSMContext):
-    call_user_id = callback_query.from_user.id
-
-    button_text = callback_query.data
-    parts = button_text.split('_')
-    chat_id = int(parts[1])
-    user_id = int(parts[2])
-
-    if call_user_id != user_id:
-        await bot.answer_callback_query(callback_query.id,
-                                        text="❌ Увы, эта кнопка не является вашой, а так хотелось...")
-        return
-
-    welcome_text = "<b>⚙️ Для использования доступны параметры:</b>\n" \
-                   "*текст* - <b>Жирный</b>\n" \
-                   "_текст_ - <i>Курсив</i>\n" \
-                   "{user_id} - айди пользователя который присоединился.\n\n" \
-                   "<b>✏️ Введите новое сообщение:</b>" \
-
-    keyboard = types.InlineKeyboardMarkup()
-    input_id = types.InlineKeyboardButton(text='Отмена ❌', callback_data='decline_welcome')
-    keyboard.row(input_id)
-
-    await bot.edit_message_text(welcome_text, callback_query.message.chat.id, callback_query.message.message_id,
-                                parse_mode="HTML", reply_markup=keyboard)
-    await MenuCategories.welcome.set()
-    await state.update_data(chat_id=chat_id)
-    await state.update_data(message_id=callback_query.message.message_id)
     await state.update_data(prev_message_id=callback_query.message.message_id)
 
 # Поиск через команду
